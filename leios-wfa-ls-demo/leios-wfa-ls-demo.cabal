@@ -8,6 +8,7 @@ library
   hs-source-dirs: lib
   exposed-modules:
     Cardano.Query
+    Cardano.WeightedFaitAccompli
 
   build-depends:
     base >=4.9 && <5,

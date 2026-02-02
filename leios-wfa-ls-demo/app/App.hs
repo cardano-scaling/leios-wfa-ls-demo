@@ -3,6 +3,7 @@
 module Main (main) where
 
 import Cardano.Query
+import Cardano.WeightedFaitAccompli
 import Data.List (sortOn)
 import qualified Data.Map.Strict as Map
 import Data.Ord (Down (..))
@@ -42,4 +43,4 @@ main = do
     eMap <- queryPoolDistrMap localNodeConnInfo
     case eMap of
         Left err -> hPutStrLn stderr (renderQueryError err) >> exitFailure
-        Right m -> print $ take 3 (Map.toList m)
+        Right m -> print $ findIStar 1000 (Map.toList m)

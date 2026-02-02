@@ -1,34 +1,42 @@
 cabal-version: 3.4
-name:          leios-wfa-ls-demo
-version:       0.1.0.0
-license:       Apache-2.0
-build-type:    Simple
+name: leios-wfa-ls-demo
+version: 0.1.0.0
+license: Apache-2.0
+build-type: Simple
 
 library
-  hs-source-dirs:  lib
-  exposed-modules: Lib
+  hs-source-dirs: lib
+  exposed-modules:
+    Cardano.Query
+
   build-depends:
-    , base                         >=4.9   && <5
+    base >=4.9 && <5,
+    cardano-api ^>=10.16,
+    cardano-crypto-class,
+    cardano-ledger-core,
+    cardano-protocol-tpraos,
+    containers,
+    errors,
+    ouroboros-consensus-cardano,
 
 executable exec
-  main-is:        App.hs
+  main-is: App.hs
   hs-source-dirs: app
   build-depends:
-    , base                     >=4.9   && <5
-    , leios-wfa-ls-demo
+    base >=4.9 && <5,
+    cardano-api ^>=10.16,
+    cardano-crypto-class,
+    cardano-ledger-core,
+    containers,
+    leios-wfa-ls-demo,
+    optparse-applicative,
+    ouroboros-consensus-cardano,
+    transformers,
 
-benchmark bench
-  type:           exitcode-stdio-1.0
-  main-is:        Bench.hs
-  hs-source-dirs: bench
-  build-depends:
-    , base >=4.9     && <5
-    , leios-wfa-ls-demo
-
-test-suite test
-  type:           exitcode-stdio-1.0
-  main-is:        Test.hs
-  hs-source-dirs: test
-  build-depends:
-    , base >=4.9     && <5
-    , leios-wfa-ls-demo
+-- benchmark bench
+--   type: exitcode-stdio-1.0
+--   main-is: Bench.hs
+--   hs-source-dirs: bench
+--   build-depends:
+--     base >=4.9 && <5,
+--     leios-wfa-ls-demo,

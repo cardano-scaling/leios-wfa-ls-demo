@@ -83,6 +83,7 @@ let
     tools.hlint
     tools.cabal-fmt
 
+    pkgs.haskellPackages.cabal-gild
     pkgs.shellcheck
     pkgs.nixpkgs-fmt
     pkgs.github-cli

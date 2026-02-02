@@ -10,11 +10,12 @@ repository cardano-haskell-packages
     d4a35cd3121aa00d18544bb0ac01c3e1691d618f462c46129271bccf39f7e8ee
 
 index-state:
-  , hackage.haskell.org 2025-06-12T04:42:37Z
-  , cardano-haskell-packages 2025-06-11T08:32:56Z
+  , hackage.haskell.org 2025-06-03T08:07:10Z
+  , cardano-haskell-packages 2025-11-20T19:55:27Z
 
-packages: 
+packages:
   leios-wfa-ls-demo
 
 tests: true
 benchmarks: true
+allow-newer: Unique:hashable

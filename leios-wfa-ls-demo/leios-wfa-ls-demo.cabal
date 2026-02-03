@@ -25,6 +25,7 @@ executable exec
   hs-source-dirs: app
   build-depends:
     base >=4.9 && <5,
+    bytestring,
     cardano-api ^>=10.16,
     cardano-crypto-class,
     cardano-ledger-core,

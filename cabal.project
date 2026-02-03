@@ -16,6 +16,24 @@ index-state:
 packages:
   leios-wfa-ls-demo
 
-tests: true
-benchmarks: true
-allow-newer: Unique:hashable
+source-repository-package
+  type: git
+  location: https://github.com/IntersectMBO/cardano-base
+  tag: b7ff12c4d1889bb69b2898de74d82d02fad0b174
+  --sha256: sha256-OK6ueM0Vc4AS+APFdlKGyVcEf1ShDKxQuee9igNbxRA=
+  subdir:
+    cardano-crypto-class
+    cardano-binary
+
+source-repository-package
+  type: git
+  location: https://github.com/IntersectMBO/cardano-base
+  tag: a1986c0394fed789a41066f7d2b41b02fa77f434
+  --sha256: sha256-dwhcv5hUN08QRrFHRPhCifdUTT6MSu6Ga4Ohex6lheM=
+  subdir:
+    cardano-crypto-tests
+
+allow-newer:
+  , *:cardano-crypto-class
+  , *:cardano-crypto-tests
+  , Unique:hashable

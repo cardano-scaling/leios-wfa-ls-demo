@@ -12,14 +12,10 @@ module Cardano.Query (
 
 import Cardano.Api hiding (Hash)
 import Cardano.Api.Internal.Query (PoolDistribution (..), decodePoolDistribution)
-import Cardano.Api.Ledger (KeyHash, StandardCrypto)
+import Cardano.Api.Ledger (KeyHash)
 import qualified Cardano.Api.Network as Network
-import Cardano.Crypto.VRF (VerKeyVRF)
-import Cardano.Ledger.Hashes (HASH, Hash)
 import Cardano.Ledger.Keys (KeyRole (..))
-import Cardano.Protocol.Crypto (VRF)
-import Control.Error (fmapLT, note, (??))
-import Control.Exception (SomeException, try)
+import Control.Error (fmapLT, note)
 import Data.Bifunctor (first)
 import qualified Data.Map.Strict as Map
 import Data.String (fromString)
@@ -92,10 +88,10 @@ queryPoolDistrMap conn = runExceptT $ do
             Left err -> Left (EraMismatch (show err))
             Right ser -> Right ser
 
-    let shelleyBasedEra = convert babbageEraOnwards
+    let shelleyBasedE = convert babbageEraOnwards
     PoolDistribution poolDistr <-
         hoistEither $
             first (DecodePoolDistr . show) $
-                decodePoolDistribution shelleyBasedEra serialisedPoolDistr
+                decodePoolDistribution shelleyBasedE serialisedPoolDistr
 
     pure (unpackPoolDistr poolDistr)

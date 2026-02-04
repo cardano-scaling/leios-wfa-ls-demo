@@ -23,8 +23,12 @@ source-repository-package
   --sha256: sha256-OK6ueM0Vc4AS+APFdlKGyVcEf1ShDKxQuee9igNbxRA=
   subdir:
     cardano-crypto-class
+    cardano-crypto-praos
     cardano-binary
 
+-- If you get for `cabal build all` something like
+-- `fatal: reference repository 'leios-wfa-ls-demo/dist-newstyle/src/cardano-b_-fe....' is shallow`
+-- then do a `git fetch --unshallow --tags --force` in that dir
 source-repository-package
   type: git
   location: https://github.com/IntersectMBO/cardano-base

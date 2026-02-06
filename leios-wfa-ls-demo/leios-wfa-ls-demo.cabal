@@ -14,7 +14,9 @@ library
   import: lang
   hs-source-dirs: lib
   exposed-modules:
+    Cardano.Leios.Committee
     Cardano.Leios.Crypto
+    Cardano.Leios.LocalSortition
     Cardano.Leios.Utils
     Cardano.Leios.WeightedFaitAccompli
     Cardano.Query

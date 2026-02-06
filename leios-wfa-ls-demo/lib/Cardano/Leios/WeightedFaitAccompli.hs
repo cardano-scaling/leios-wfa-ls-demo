@@ -2,117 +2,57 @@
 {-# LANGUAGE TypeApplications #-}
 
 module Cardano.Leios.WeightedFaitAccompli (
-    CommitteeSize,
-    Party (..),
-    OrderedSetOfParties,
-    mkOrderedSetOfParties,
-    wFALS,
-    -- appointSeats,
+  CommitteeSelection (..),
+  NonPersistentVoters (..),
+  PersistentSeats,
+  PersistentSeat (..),
+  wFA,
 ) where
 
-import Cardano.Api.Ledger (KeyHash)
-import Cardano.Crypto.DSIGN
-import Cardano.Ledger.Keys (KeyRole (..))
-import Data.List (sortOn)
+import Cardano.Leios.Committee
+import Cardano.Leios.Crypto
 import qualified Data.Map as Map
-import Data.Ord (Down (..))
 import Data.Word (Word16)
 
 {-
-This module implements the core of Weighted Fait Accompli with local sortition.
+This module implements the core of Weighted Fait Accompli.
 
 The code below closely follows the paper found here: https://dl.acm.org/doi/10.1145/3576915.3623194
 
-Note that the protocol described in figure 6 on page 854 assumes an ordered
-list of stakepools and their stake in the construction of the committee.
+The why:
 
+The core idea of the above paper is that one can reduce randomness where it isn’t needed
+to get a smaller committee (so that hopefully consensus is reaches faster). It achieves this by noting
+that large proportion of participants holds much of the stake, for these participants we
+can assign them a deterministic seat in the commitee (no lottery over stake needed).
+This remaining seats are then handles using random sampling over stake (like Praos with a VRF).
+The result of this is that these fixed seats have zero variance (since the VRF approach is stochastic).
+This zero variance is beneficial as it concentrates the voting weight teigtly around the true
+staking distribution, which reduces the number of pools that need to participate to reach consensus.
+
+In a nutshell, with FA; you know a pool can vote, while with a randomness based election model there is
+a chance it can vote.
+
+This is why the paper is called
+
+> fait accompli /fĕt″ ä-kŏm-plē′, fāt″/ noun An accomplished, presumably irreversible deed or fact.
+
+Since a large proportion of the committee is fixed in advanced.
 -}
 
-{- | A type wrapper around `Word16` representing the maximal committee
-the protocol targets. Note that this the protocol on avarage will
-have a committee size of this size, since the non-persistent seats
-are stochasticly assigned based on a VRF.
--}
-type CommitteeSize = Word16
-
-data Party = Party
-    { poolId :: KeyHash StakePool
-    , blsVerKey :: VerKeyDSIGN BLS12381MinSigDSIGN
-    , stake :: Rational
-    }
-    deriving (Show)
-
-{- | A type representing the ordered (from large to small) set of
-stakepools. To construct this use `mkOrderedSetOfParties` to ensure
-the underlying list is ordered. This type also contains the committee
-size.
--}
-data OrderedSetOfParties = OrderedSetOfParties
-    { parties :: [Party]
-    , committeeSize :: CommitteeSize
-    }
-
-data MkOrderedSetOfPartiesError
-    = CommitteeTooLarge
-        { requestedCommitteeSize :: CommitteeSize
-        , numberOfPools :: Int
-        }
-    | TooManyPools
-        { numberOfPools :: Int
-        , maxPoolsAllowed :: Word16
-        }
-    | TotalStakeNotOne
-    deriving (Show)
-
-{- | A function to safely construct a `OrderedSetOfParties` from a
-list of stakepools identified by their `KeyHash StakePool`,
-their stake `Rational` and the `committeeSize`.
-
-Note that we require the committee size to be smaller or equal
-to the number of pools. We further require that the number of
-pools is never more than the `maxBound` of an `Word16`. And lastly
-that the total sum of the stake is one. Perhaps we could also check
-for negative stake, but I think we can assume that the node returns that.
--}
-mkOrderedSetOfParties :: CommitteeSize -> [Party] -> Either MkOrderedSetOfPartiesError OrderedSetOfParties
-mkOrderedSetOfParties comSize poolDistr
-    | numPools > fromIntegral (maxBound :: Word16) =
-        Left $
-            TooManyPools
-                { numberOfPools = numPools
-                , maxPoolsAllowed = maxBound
-                }
-    | fromIntegral @Word16 @Int comSize > numPools =
-        Left $
-            CommitteeTooLarge
-                { requestedCommitteeSize = comSize
-                , numberOfPools = numPools
-                }
-    | (sum . map stake) poolDistr /= 1 = Left TotalStakeNotOne
-    | otherwise =
-        Right $
-            OrderedSetOfParties
-                { parties = sortOn (Down . stake) poolDistr
-                , committeeSize = comSize
-                }
-  where
-    numPools = length poolDistr
-
-{- | The function that calculated the sum of the stake of the remaining
-`i` elements of the input. Defined in the paper in figure 6 on page 854.
--}
+-- | The function that calculated the sum of the stake of the remaining
+-- `i` elements of the input. Defined in the paper in figure 6 on page 854.
 rho :: Int -> OrderedSetOfParties -> Rational
 rho i = sum . drop i . map stake . parties
 
-{- | Find the smallest `i` such that for `lst' = drop i lst`  either `rho i lst = 0`
-or
-
-     `(1-\frac{lst' !! i }{rho i lst'})^2 >= \frac{n-i}{n-i+1}`
-
-Note that due to this function ordering the inputs of the list
-from large to small stake, the first check is equivalent to having
-the remaining stake in `lst'` being zero.
--}
+-- | Find the smallest `i` such that for `lst' = drop i lst`  either `rho i lst = 0`
+-- or
+--
+--      `(1-\frac{lst' !! i }{rho i lst'})^2 >= \frac{n-i}{n-i+1}`
+--
+-- Note that due to this function ordering the inputs of the list
+-- from large to small stake, the first check is equivalent to having
+-- the remaining stake in `lst'` being zero.
 findIStar :: OrderedSetOfParties -> Int
 findIStar (OrderedSetOfParties [] _) = 0
 findIStar (OrderedSetOfParties lst n) = go 0 lst
@@ -120,14 +60,14 @@ findIStar (OrderedSetOfParties lst n) = go 0 lst
     -- This case is never reached, added to make the function total to be sure.
     go i [] = i
     go i (x : xs)
-        -- Note that the second condition here in the or statement
-        -- is a reduction "either $\rho_i=0$" in the paper. This because
-        -- the input list is ordered. So, $\rho_i=0" <=> all remaining
-        -- stake of the trailing elements in the list is zero <=>
-        -- the first element of the remaing list has zero stake.
-        | stake x == 0 = i
-        | (1 - f) * (1 - f) >= (n' - i') / (n' - i' + 1) = i
-        | otherwise = go (i + 1) xs
+      -- Note that the second condition here in the or statement
+      -- is a reduction "either $\rho_i=0$" in the paper. This because
+      -- the input list is ordered. So, $\rho_i=0" <=> all remaining
+      -- stake of the trailing elements in the list is zero <=>
+      -- the first element of the remaing list has zero stake.
+      | stake x == 0 = i
+      | (1 - f) * (1 - f) >= (n' - i') / (n' - i' + 1) = i
+      | otherwise = go (i + 1) xs
       where
         -- If `snd x > 0` then `rho i (OrderedSetOfParties (x:xs)) > 0`
         -- hence f is below is well-defined.
@@ -145,61 +85,69 @@ findIStar (OrderedSetOfParties lst n) = go 0 lst
         n' = fromIntegral @CommitteeSize @Rational n
         i' = fromIntegral @Int @Rational i
 
-{- | A type representing an Epoch-specific pool identifier
-Note that the CIP 164 CDDL does not say what this should be!
--}
+-- | A type representing an Epoch-specific pool identifier
+-- Note that the CIP 164 CDDL does not say what this should be!
 type PersistentVoterId = Word16
 
+-- | A type representing a persistent voter seat. The goal of fait accompli
+-- is to assign more weight to large stakepools
 data PersistentSeat = PersistentSeat
-    { blsVK :: VerKeyDSIGN BLS12381MinSigDSIGN
-    , weight :: Rational
-    }
-    deriving (Show)
+  { publicVoteKeyPersistent :: PublicVoteKey
+  , weightPersistentSeat :: Rational
+  }
+  deriving (Show)
 
 type PersistentSeats = Map.Map PersistentVoterId PersistentSeat
 
-type NonPersistentVoters = Map.Map (KeyHash StakePool) (VerKeyDSIGN BLS12381MinSigDSIGN)
+data NonPersistentVoters = NonPersistentVoters
+  { voters :: Map.Map PoolID PublicVoteKey
+  , weightPerNonPersistentSeat :: Rational
+  }
+  deriving (Show)
 
-type RemainingNonPersistentStake = Rational
+data CommitteeSelection = CommitteeSelection
+  { persistentSeats :: PersistentSeats
+  , nonPersistentVoters :: NonPersistentVoters
+  }
+  deriving (Show)
 
-data EpochData = EpochData
-    { persistentSeats :: PersistentSeats
-    , nonPersistentVoters :: NonPersistentVoters
-    , remainingStake :: RemainingNonPersistentStake
+wFA :: OrderedSetOfParties -> CommitteeSelection
+wFA osp@(OrderedSetOfParties prts n) =
+  CommitteeSelection
+    { persistentSeats = persSeats
+    , nonPersistentVoters = nonPersVoters
     }
-    deriving (Show)
-
-wFALS :: OrderedSetOfParties -> EpochData
-wFALS osp@(OrderedSetOfParties prts n) =
-    EpochData
-        { persistentSeats = persSeats
-        , nonPersistentVoters = nonPersVoters
-        , remainingStake = remStake
-        }
   where
     iStar = findIStar osp
+
     -- Note that the paper appoints pools `i \in [0, .. (i*-1)]
     -- to be persistent voters
     i = max 0 $ iStar - 1
-    (pers, nonPers) = splitAt i prts
+    (persistent, nonPersistent) = splitAt i prts
+    n2 = fromIntegral @CommitteeSize @Rational n - fromIntegral @Int @Rational (length persistent)
+
     persSeats :: PersistentSeats
     persSeats =
-        Map.fromList $
-            [ ( fromIntegral idx
-              , PersistentSeat
-                    { blsVK = blsVerKey p
-                    , weight = stake p
-                    }
-              )
-            | (idx, p) <- zip [(0 :: Int) ..] pers
-            ]
+      Map.fromList $
+        [ ( fromIntegral @Int @Word16 idx
+          , PersistentSeat
+              { publicVoteKeyPersistent = publicVoteKey p
+              , weightPersistentSeat = stake p
+              }
+          )
+        | (idx, p) <- zip [(0 :: Int) ..] persistent
+        ]
 
     nonPersVoters :: NonPersistentVoters
     nonPersVoters =
-        Map.fromList
-            [ (poolId p, blsVerKey p)
-            | p <- nonPers
-            ]
+      NonPersistentVoters
+        { voters =
+            Map.fromList
+              [ (poolID p, publicVoteKey p)
+              | p <- nonPersistent
+              ]
+        , weightPerNonPersistentSeat = if n2 /= 0 then remStake / n2 else 0
+        }
 
-    remStake :: RemainingNonPersistentStake
-    remStake = rho i $ OrderedSetOfParties nonPers n
+    remStake :: Rational
+    remStake = rho 0 $ OrderedSetOfParties nonPersistent n

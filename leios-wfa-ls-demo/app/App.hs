@@ -1,9 +1,12 @@
+{-# LANGUAGE TypeApplications #-}
+
 module Main (main) where
 
 import Cardano.Leios.Committee
 import Cardano.Leios.Utils
 import Cardano.Leios.WeightedFaitAccompli
 import Cardano.Query
+import Cardano.Utils
 import qualified Data.Map.Strict as Map
 import Options.Applicative
 import System.Exit (exitFailure)
@@ -44,7 +47,7 @@ main = do
     Left err -> hPutStrLn stderr (renderQueryError err) >> exitFailure
     Right m -> do
       -- Note that on preview we have ~611 pools
-      let commSize = 100 :: CommitteeSize
+      let commSize = 430 :: CommitteeSize
           prts = createParties $ Map.toList m
       case mkOrderedSetOfParties commSize prts of
         Left err ->
@@ -60,6 +63,7 @@ main = do
               stakePerNonPersistentSeat :: Double
               stakePerNonPersistentSeat = (fromRational . weightPerNonPersistentSeat . nonPersistentVoters) committee
 
+          writeStakeCSV "stake.csv" numPersistent (fromIntegral @CommitteeSize @Int commSize) pools
           putStrLn $ "Target committee size  " <> show commSize
           putStrLn $
             "Persistent voters:     "

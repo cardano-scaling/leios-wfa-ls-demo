@@ -96,6 +96,10 @@ let
     pkgs.bash
     pkgs.git
     pkgs.which
+    
+    pkgs.python3
+    pkgs.python3Packages.pandas
+    pkgs.python3Packages.matplotlib
   ];
 
   shell = project.shellFor {

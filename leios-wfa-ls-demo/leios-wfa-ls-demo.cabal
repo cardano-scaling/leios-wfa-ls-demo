@@ -20,6 +20,7 @@ library
     Cardano.Leios.Utils
     Cardano.Leios.WeightedFaitAccompli
     Cardano.Query
+    Cardano.Utils
 
   build-depends:
     base >=4.9 && <5,
@@ -30,6 +31,7 @@ library
     cardano-protocol-tpraos,
     containers,
     errors,
+    text,
     ouroboros-consensus-cardano,
 
 executable exec

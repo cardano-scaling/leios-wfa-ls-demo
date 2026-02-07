@@ -7,6 +7,7 @@ module Cardano.Leios.WeightedFaitAccompli (
   PersistentSeats,
   PersistentSeat (..),
   wFA,
+  rho,
 ) where
 
 import Cardano.Leios.Committee

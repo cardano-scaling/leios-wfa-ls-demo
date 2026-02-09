@@ -9,9 +9,8 @@ module Cardano.Leios.Committee (
   mkOrderedSetOfParties,
 ) where
 
-import Cardano.Api.Ledger (KeyHash)
-import Cardano.Ledger.Keys (KeyRole (..))
 import Cardano.Leios.Crypto
+import Cardano.Leios.Types
 import Data.List (sortOn)
 import Data.Ord (Down (..))
 import Data.Word (Word16)
@@ -21,10 +20,6 @@ import Data.Word (Word16)
 -- have a committee size of this size, since the non-persistent seats
 -- are stochasticly assigned based on a VRF.
 type CommitteeSize = Word16
-
--- | A type that represent the pool id. This is the blake2b-224 hash of
--- the ed25519 cold key of the stakepool.
-type PoolID = KeyHash StakePool
 
 data Party = Party
   { poolID :: PoolID

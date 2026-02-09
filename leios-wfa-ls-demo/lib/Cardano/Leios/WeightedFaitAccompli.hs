@@ -3,9 +3,11 @@
 
 module Cardano.Leios.WeightedFaitAccompli (
   CommitteeSelection (..),
-  NonPersistentVoters (..),
+  NonPersistentVoters,
+  NonPersistentVoter (..),
   PersistentSeats,
   PersistentSeat (..),
+  NonPersistentLocalSortition (..),
   PersistentVoterId,
   wFA,
   rho,
@@ -44,7 +46,7 @@ Since a large proportion of the committee is fixed in advanced.
 
 -- | The function that calculated the sum of the stake of the remaining
 -- `i` elements of the input. Defined in the paper in figure 6 on page 854.
-rho :: Int -> OrderedSetOfParties -> Rational
+rho :: Int -> OrderedSetOfParties -> Stake
 rho i = sum . drop i . map stake . parties
 
 -- | Find the smallest `i` such that for `lst' = drop i lst`  either `rho i lst = 0`
@@ -84,8 +86,8 @@ findIStar (OrderedSetOfParties lst n) = go 0 lst
         -- `(1-f)^2` is trivially bigger or equal than zero.
         -- This implies that the case `n' + 1 == i'`
         -- is never reached and thus the divisor is never zero.
-        n' = fromIntegral @CommitteeSize @Rational n
-        i' = fromIntegral @Int @Rational i
+        n' = fromIntegral @CommitteeSize @Stake n
+        i' = fromIntegral @Int @Stake i
 
 -- | A type representing an Epoch-specific pool identifier
 -- Note that the CIP 164 CDDL does not say what this should be!
@@ -95,21 +97,29 @@ type PersistentVoterId = Word16
 -- is to assign more weight to large stakepools
 data PersistentSeat = PersistentSeat
   { publicVoteKeyPersistent :: PublicVoteKey
-  , weightPersistentSeat :: Rational
+  , weightPersistentSeat :: Weight
   }
   deriving (Show)
 
 type PersistentSeats = Map.Map PersistentVoterId PersistentSeat
 
-data NonPersistentVoters = NonPersistentVoters
-  { voters :: Map.Map PoolID PublicVoteKey
-  , weightPerNonPersistentSeat :: Rational
+data NonPersistentVoter = NonPersistentVoter
+  { publicVoteKeyNonPersistent :: PublicVoteKey
+  , stakeNonPersistentVoter :: Stake
+  }
+  deriving (Show)
+
+type NonPersistentVoters = Map.Map PoolID NonPersistentVoter
+
+data NonPersistentLocalSortition = NonPersistentLocalSortition
+  { voters :: NonPersistentVoters
+  , weightPerNonPersistentSeat :: Weight
   }
   deriving (Show)
 
 data CommitteeSelection = CommitteeSelection
   { persistentSeats :: PersistentSeats
-  , nonPersistentVoters :: NonPersistentVoters
+  , nonPersistentVoters :: NonPersistentLocalSortition
   }
   deriving (Show)
 
@@ -126,7 +136,7 @@ wFA osp@(OrderedSetOfParties prts n) =
     -- to be persistent voters
     i = max 0 $ iStar - 1
     (persistent, nonPersistent) = splitAt i prts
-    n2 = fromIntegral @CommitteeSize @Rational n - fromIntegral @Int @Rational (length persistent)
+    n2 = fromIntegral @CommitteeSize @Stake n - fromIntegral @Int @Stake (length persistent)
 
     persSeats :: PersistentSeats
     persSeats =
@@ -140,16 +150,21 @@ wFA osp@(OrderedSetOfParties prts n) =
         | (idx, p) <- zip [(0 :: Int) ..] persistent
         ]
 
-    nonPersVoters :: NonPersistentVoters
+    nonPersVoters :: NonPersistentLocalSortition
     nonPersVoters =
-      NonPersistentVoters
+      NonPersistentLocalSortition
         { voters =
             Map.fromList
-              [ (poolID p, publicVoteKey p)
+              [ ( poolID p
+                , NonPersistentVoter
+                    { publicVoteKeyNonPersistent = publicVoteKey p
+                    , stakeNonPersistentVoter = stake p
+                    }
+                )
               | p <- nonPersistent
               ]
         , weightPerNonPersistentSeat = if n2 /= 0 then remStake / n2 else 0
         }
 
-    remStake :: Rational
+    remStake :: Stake
     remStake = rho 0 $ OrderedSetOfParties nonPersistent n

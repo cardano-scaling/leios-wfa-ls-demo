@@ -47,7 +47,7 @@ main = do
     Left err -> hPutStrLn stderr (renderQueryError err) >> exitFailure
     Right m -> do
       -- Note that on preview we have ~611 pools
-      let commSize = 430 :: CommitteeSize
+      let commSize = 380 :: CommitteeSize
           prts = createParties $ Map.toList m
       case mkOrderedSetOfParties commSize prts of
         Left err ->

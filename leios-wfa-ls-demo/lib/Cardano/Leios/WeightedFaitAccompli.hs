@@ -6,6 +6,7 @@ module Cardano.Leios.WeightedFaitAccompli (
   NonPersistentVoters (..),
   PersistentSeats,
   PersistentSeat (..),
+  PersistentVoterId,
   wFA,
   rho,
 ) where

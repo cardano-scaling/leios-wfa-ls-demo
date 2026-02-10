@@ -16,11 +16,14 @@ import Data.Ord (Down (..))
 import Data.Word (Word16)
 
 -- | A type wrapper around `Word16` representing the maximal committee
--- the protocol targets. Note that this the protocol on avarage will
--- have a committee size of this size, since the non-persistent seats
+-- size the protocol targets. Note that this the protocol on avarage will
+-- have a committee of this size, since the non-persistent seats
 -- are stochasticly assigned based on a VRF.
 type CommitteeSize = Word16
 
+-- | A type representing a party in the Leios protocol.
+-- This type assumes that the public key is valid,
+-- e.g, the Proof of Possesion of this key has been checked.
 data Party = Party
   { poolID :: PoolID
   -- ^ The `poolId` is not strictly needed in this type

@@ -8,7 +8,7 @@ module Cardano.Leios.WeightedFaitAccompli (
   PersistentSeats,
   PersistentSeat (..),
   NonPersistentLocalSortition (..),
-  PersistentVoterId,
+  PersistentVoterIndex,
   wFA,
   rho,
 ) where
@@ -46,7 +46,7 @@ Since a large proportion of the committee is fixed in advanced.
 
 -- | The function that calculated the sum of the stake of the remaining
 -- `i` elements of the input. Defined in the paper in figure 6 on page 854.
-rho :: Int -> OrderedSetOfParties -> Stake
+rho :: Int -> OrderedSetOfParties -> RelativeStake
 rho i = sum . drop i . map stake . parties
 
 -- | Find the smallest `i` such that for `lst' = drop i lst`  either `rho i lst = 0`
@@ -86,12 +86,11 @@ findIStar (OrderedSetOfParties lst n) = go 0 lst
         -- `(1-f)^2` is trivially bigger or equal than zero.
         -- This implies that the case `n' + 1 == i'`
         -- is never reached and thus the divisor is never zero.
-        n' = fromIntegral @CommitteeSize @Stake n
-        i' = fromIntegral @Int @Stake i
+        n' = fromIntegral @CommitteeSize @RelativeStake n
+        i' = fromIntegral @Int @RelativeStake i
 
--- | A type representing an Epoch-specific pool identifier
--- Note that the CIP 164 CDDL does not say what this should be!
-type PersistentVoterId = Word16
+-- | A type representing an Epoch-specific pool index
+type PersistentVoterIndex = Word16
 
 -- | A type representing a persistent voter seat. The goal of fait accompli
 -- is to assign more weight to large stakepools
@@ -101,11 +100,11 @@ data PersistentSeat = PersistentSeat
   }
   deriving (Show)
 
-type PersistentSeats = Map.Map PersistentVoterId PersistentSeat
+type PersistentSeats = Map.Map PersistentVoterIndex PersistentSeat
 
 data NonPersistentVoter = NonPersistentVoter
   { publicVoteKeyNonPersistent :: PublicVoteKey
-  , stakeNonPersistentVoter :: Stake
+  , stakeNonPersistentVoter :: RelativeStake
   }
   deriving (Show)
 
@@ -136,7 +135,8 @@ wFA osp@(OrderedSetOfParties prts n) =
     -- to be persistent voters
     i = max 0 $ iStar - 1
     (persistent, nonPersistent) = splitAt i prts
-    n2 = fromIntegral @CommitteeSize @Stake n - fromIntegral @Int @Stake (length persistent)
+    n2 =
+      fromIntegral @CommitteeSize @RelativeStake n - fromIntegral @Int @RelativeStake (length persistent)
 
     persSeats :: PersistentSeats
     persSeats =
@@ -166,5 +166,5 @@ wFA osp@(OrderedSetOfParties prts n) =
         , weightPerNonPersistentSeat = if n2 /= 0 then remStake / n2 else 0
         }
 
-    remStake :: Stake
+    remStake :: RelativeStake
     remStake = rho 0 $ OrderedSetOfParties nonPersistent n

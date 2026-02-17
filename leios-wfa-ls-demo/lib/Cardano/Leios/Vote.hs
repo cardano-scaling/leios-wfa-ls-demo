@@ -9,9 +9,9 @@ import Cardano.Leios.Crypto (
   OutputVRF,
   Vote,
   Weight,
-  checkVRFOutput,
   checkVRFThreshold,
-  checkVoteSignature,
+  coercePublicKeyLeios,
+  verifyWithRoleLeios,
  )
 import Cardano.Leios.WeightedFaitAccompli (
   CommitteeSelection (..),
@@ -66,7 +66,7 @@ verifyPersistentVote seat eID ebHash vote
       Left "verifyPersistentVote: election ID in vote does not match input election ID"
   | ebHash /= pvEndorserBlockHash vote =
       Left "verifyPersistentVote: EB hash in vote does not match input EB hash"
-  | otherwise = checkVoteSignature (publicVoteKeyPersistent seat) ebHash (pvVoteSignature vote)
+  | otherwise = verifyWithRoleLeios (publicVoteKeyPersistent seat) ebHash (pvVoteSignature vote)
 
 -- | Verify a `NonPersistentVote`'s validity against and `ElectionID` for a given `EndorserblockHash`
 -- and a certain `NonPersistentVoter`. If the vote is valid, this function returns the `Weight`
@@ -83,11 +83,11 @@ verifyNonPersistentVote voter eID ebHash vote
           sig = npvVoteSignature vote
           vrfOutput = npvEligibilitySignature vote
           stake = stakeNonPersistentVoter voter
-      checkVoteSignature vk ebHash sig
+      verifyWithRoleLeios vk ebHash sig
       -- note that we currently do not add the praos randomness here
       -- we should use something like
       --
       -- checkVRFOutput vk (PraosNonceAsBS <> (writeBinaryWord64 eID)) vrfOutput
       --
-      checkVRFOutput vk eID vrfOutput
+      verifyWithRoleLeios (coercePublicKeyLeios vk) eID vrfOutput
       checkVRFThreshold stake vrfOutput

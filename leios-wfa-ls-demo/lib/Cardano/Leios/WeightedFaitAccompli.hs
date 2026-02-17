@@ -95,7 +95,7 @@ type PersistentVoterIndex = Word16
 -- | A type representing a persistent voter seat. The goal of fait accompli
 -- is to assign more weight to large stakepools
 data PersistentSeat = PersistentSeat
-  { publicVoteKeyPersistent :: PublicVoteKey
+  { publicVoteKeyPersistent :: PublicKeyLeios 'Vote
   , weightPersistentSeat :: Weight
   }
   deriving (Show)
@@ -103,7 +103,7 @@ data PersistentSeat = PersistentSeat
 type PersistentSeats = Map.Map PersistentVoterIndex PersistentSeat
 
 data NonPersistentVoter = NonPersistentVoter
-  { publicVoteKeyNonPersistent :: PublicVoteKey
+  { publicVoteKeyNonPersistent :: PublicKeyLeios 'Vote
   , stakeNonPersistentVoter :: RelativeStake
   }
   deriving (Show)

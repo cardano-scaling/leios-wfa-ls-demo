@@ -29,7 +29,7 @@ data Party = Party
   -- ^ The `poolId` is not strictly needed in this type
   --   keeping it for know as the bls key will be derived from it
   --   in tests
-  , publicVoteKey :: PublicVoteKey
+  , publicVoteKey :: PublicKeyLeios 'Vote
   , stake :: Rational
   }
   deriving (Show)

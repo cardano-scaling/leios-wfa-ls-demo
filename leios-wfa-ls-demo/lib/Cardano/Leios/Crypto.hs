@@ -43,11 +43,11 @@ import Numeric.Natural (Natural)
 
 -- In Linear Leios we use BLS signature key material in three different ways.
 --
--- 1) At registration, to issue a proof of possesion
+-- 1) At registration, to issue a proof of possession
 -- 2) As a voter to endorse an EB
 -- 3) As a VRF key, to check eligibility to become a non-persistent voter
 --
--- Each underlying signature is a BLS signature, but each is seperated by
+-- Each underlying signature is a BLS signature, but each is separated by
 -- its usage context, and with it its signing context.
 
 -- | Leios has three key roles, either use a key for Voting, a VRF, or to issue a PoP.
@@ -67,14 +67,14 @@ newtype SignatureLeios (r :: KeyRoleLeios)
   = SignatureLeios (SigDSIGN BLS12381MinSigDSIGN)
   deriving newtype (Eq, Show)
 
--- | The vote of a `Party` that signals endorsment with an EB
+-- | The vote of a `Party` that signals endorsement with an EB
 type Vote = SignatureLeios 'Vote
 
--- | The VRF output that is used to deterministicly let a voting party
--- pick a random uniform distr. value between 0 and `2^384`.
+-- | The VRF output that is used to deterministically let a voting party
+-- pick a random uniform distribution value between 0 and `2^384`.
 type OutputVRF = SignatureLeios 'VRF
 
--- | The proof of possesion of any `PublicVoteKeyLeios r`
+-- | The proof of possession of any `PublicVoteKeyLeios r`
 type PublicKeyPossessionProofLeios = PossessionProofDSIGN BLS12381MinSigDSIGN
 
 coercePrivateKeyLeios :: PrivateKeyLeios r1 -> PrivateKeyLeios r2
@@ -91,7 +91,7 @@ minSigSignatureDST = BLS12381SignContext (Just "BLS_SIG_BLS12381G1_XMD:SHA-256_S
 minSigPoPDST :: BLS12381SignContext
 minSigPoPDST = BLS12381SignContext (Just "BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_POP_") Nothing
 
--- | A helper function used in the construction of the domain seperation for bls signatures
+-- | A helper function used in the construction of the domain separation for BLS signatures
 -- for mainnet and testnet
 networkTag :: NetworkId -> ByteString
 networkTag Mainnet = "MAINNET"
@@ -127,7 +127,7 @@ verifyWithRoleLeios ::
 verifyWithRoleLeios (PublicKeyLeios (nId, vk)) msg (SignatureLeios sig) =
   verifyDSIGN (blsCtx (Proxy @r) nId) vk msg sig
 
--- | Create a Proof of Possesion for a pool with `PoolId` and a given `PrivateKeyLeios 'PoP`
+-- | Create a Proof of Possession for a pool with `PoolId` and a given `PrivateKeyLeios 'PoP`
 -- The binding to the pool id ensures that others cannot replay this PoP in their registration.
 createPossessionProofLeios :: PrivateKeyLeios 'PoP -> PoolId -> PublicKeyPossessionProofLeios
 createPossessionProofLeios (PrivateKeyLeios (nId, sk)) pId = createPossessionProofDSIGN ctx' sk
@@ -142,12 +142,12 @@ verifyPossessionProofLeios (PublicKeyLeios (nId, vk)) pId = verifyPossessionProo
     ctx = blsCtx (Proxy @'PoP) nId
     ctx' = ctx {blsSignContextAug = blsSignContextAug ctx <> Just ((hashToBytes . unKeyHash) pId)}
 
--- | Place holder vrf check
+-- | Placeholder VRF check
 checkVRFThreshold :: RelativeStake -> OutputVRF -> Either String Weight
 checkVRFThreshold stake _output
   | stake > 1 % 3 = Left msg
   | otherwise = Right (1 % fromIntegral @Natural @Integer vrfMaxValue)
   where
-    msg = "Stake to large"
+    msg = "Stake too large"
     vrfMaxValue :: Natural
     vrfMaxValue = (2 :: Natural) ^ (8 * sizeSigDSIGN (Proxy @BLS12381MinSigDSIGN))

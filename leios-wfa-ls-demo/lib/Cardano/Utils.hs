@@ -8,8 +8,8 @@ import Text.Printf (printf)
 
 import Cardano.Leios.Committee (OrderedSetOfParties (..), Party (..))
 
--- | Write the ordered stake distribution to a CSV for plotting
--- Also takes in the file path and the number of persistent voter
+-- | Write the ordered stake distribution to a CSV for plotting.
+-- Also takes the file path, the number of persistent voters,
 -- and the committee size for plotting.
 writeStakeCSV :: FilePath -> Int -> Int -> OrderedSetOfParties -> IO ()
 writeStakeCSV out persistentCount committeeSize OrderedSetOfParties {parties} = do

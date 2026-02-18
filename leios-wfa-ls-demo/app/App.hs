@@ -45,21 +45,21 @@ main = do
         (optsParser <**> helper)
         (fullDesc <> progDesc "Query a Cardano node for data")
 
-  let networkNr = optTestnetMagic o
-      localNodeConnInfo = mkLocalNodeConnInfo networkNr (optNodeSocket o) 0
-  eMap <- queryPoolDistrMap localNodeConnInfo
-  case eMap of
+  let networkMagic = optTestnetMagic o
+      localNodeConnInfo = mkLocalNodeConnInfo networkMagic (optNodeSocket o) 0
+  poolDistrResult <- queryPoolDistrMap localNodeConnInfo
+  case poolDistrResult of
     Left err -> hPutStrLn stderr (renderQueryError err) >> exitFailure
     Right m -> do
       -- Note that on preview we have ~611 pools
       -- on mainnet this is ~3000 where ~800 have ~80% of stake
-      let commSize = 380 :: CommitteeSize
+      let targetCommitteeSize = 380 :: CommitteeSize
           nId =
-            if networkNr == 764824073
+            if networkMagic == 764824073
               then Mainnet
-              else Testnet (NetworkMagic (fromIntegral @Int @Word32 networkNr)) :: NetworkId
-          prts = createParties nId $ Map.toList m
-      case mkOrderedSetOfParties commSize prts of
+              else Testnet (NetworkMagic (fromIntegral @Int @Word32 networkMagic)) :: NetworkId
+          unOrderedParties = createParties nId $ Map.toList m
+      case mkOrderedSetOfParties targetCommitteeSize unOrderedParties of
         Left err ->
           hPutStrLn stderr $ "'mkOrderedSetOfParties' error: " <> show err
         Right pools -> do
@@ -74,8 +74,8 @@ main = do
               stakePerNonPersistentSeat :: Double
               stakePerNonPersistentSeat = (fromRational . weightPerNonPersistentSeat . nonPersistentVoters) committee
 
-          writeStakeCSV "stake.csv" numPersistent (fromIntegral @CommitteeSize @Int commSize) pools
-          putStrLn $ "Target committee size  " <> show commSize
+          writeStakeCSV "stake.csv" numPersistent (fromIntegral @CommitteeSize @Int targetCommitteeSize) pools
+          putStrLn $ "Target committee size  " <> show targetCommitteeSize
           putStrLn $
             "Persistent voters:     "
               <> show numPersistent

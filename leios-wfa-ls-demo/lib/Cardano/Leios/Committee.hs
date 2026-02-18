@@ -16,18 +16,18 @@ import Data.Ord (Down (..))
 import Data.Word (Word16)
 
 -- | A type wrapper around `Word16` representing the maximal committee
--- size the protocol targets. Note that this the protocol on avarage will
+-- size the protocol targets. Note that this protocol on average will
 -- have a committee of this size, since the non-persistent seats
--- are stochasticly assigned based on a VRF.
+-- are stochastically assigned based on a VRF.
 type CommitteeSize = Word16
 
 -- | A type representing a party in the Leios protocol.
 -- This type assumes that the public key is valid,
--- e.g, the Proof of Possesion of this key has been checked.
+-- e.g., the Proof of Possession of this key has been checked.
 data Party = Party
   { poolId :: PoolId
   -- ^ The `poolId` is not strictly needed in this type
-  --   keeping it for know as the bls key will be derived from it
+  --   keeping it for now as the BLS key will be derived from it
   --   in tests
   , publicVoteKey :: PublicKeyLeios 'Vote
   , stake :: Rational
@@ -35,7 +35,7 @@ data Party = Party
   deriving (Show)
 
 -- | A type representing the ordered (from large to small) set of
--- stakepools. To construct this use `mkOrderedSetOfParties` to ensure
+-- stake pools. To construct this use `mkOrderedSetOfParties` to ensure
 -- the underlying list is ordered. This type also contains the committee
 -- size.
 data OrderedSetOfParties = OrderedSetOfParties
@@ -44,14 +44,14 @@ data OrderedSetOfParties = OrderedSetOfParties
   }
 
 -- | A type representing the possible ways we can fail when
--- constructing a ordered set of paries. These are
+-- constructing an ordered set of parties. These are
 --
 -- 1. We want a committee size that is larger than #pools
--- 2. We are limiting the number of pools to `(maxBound :: Word16)
---    exeeding this fill also error.
+-- 2. We are limiting the number of pools to `(maxBound :: Word16)`;
+--    exceeding this will also error.
 --
--- Note that we do not check that stake is never negative or the
--- sum is not 1, this is assumed.
+-- Note that we do not check that stake is non-negative or that the
+-- sum is 1, this is assumed.
 data MkOrderedSetOfPartiesError
   = CommitteeTooLarge
       { requestedCommitteeSize :: CommitteeSize
@@ -63,13 +63,13 @@ data MkOrderedSetOfPartiesError
       }
   deriving (Show)
 
--- | A function to safely construct a `OrderedSetOfParties` from a
--- list of stakepools identified by their `PoolId`,
+-- | A function to safely construct an `OrderedSetOfParties` from a
+-- list of stake pools identified by their `PoolId`,
 -- their stake `Rational` and the `committeeSize`.
 --
 -- Note that we require the committee size to be smaller or equal
 -- to the number of pools. We further require that the number of
--- pools is never more than the `maxBound` of an `Word16`. And lastly
+-- pools is never more than the `maxBound` of a `Word16`. And lastly
 -- that the total sum of the stake is one. Perhaps we could also check
 -- for negative stake, but I think we can assume that the node returns that.
 mkOrderedSetOfParties ::

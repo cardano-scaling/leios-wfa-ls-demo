@@ -29,13 +29,13 @@ The code below closely follows the paper found here: https://dl.acm.org/doi/10.1
 
 The why:
 
-The core idea of the above paper is that one can reduce randomness where it isn’t needed
-to get a smaller committee (so that hopefully consensus is reaches faster). It achieves this by noting
-that large proportion of participants holds much of the stake, for these participants we
-can assign them a deterministic seat in the commitee (no lottery over stake needed).
-This remaining seats are then handles using random sampling over stake (like Praos with a VRF).
+The core idea of the above paper is that one can reduce randomness where it is not needed
+to get a smaller committee (so that hopefully consensus is reached faster). It achieves this by noting
+that a large proportion of participants hold much of the stake; for these participants we
+can assign them a deterministic seat in the committee (no lottery over stake needed).
+The remaining seats are then handled using random sampling over stake (like Praos with a VRF).
 The result of this is that these fixed seats have zero variance (since the VRF approach is stochastic).
-This zero variance is beneficial as it concentrates the voting weight teigtly around the true
+This zero variance is beneficial as it concentrates the voting weight tightly around the true
 staking distribution, which reduces the number of pools that need to participate to reach consensus.
 
 In a nutshell, with FA; you know a pool can vote, while with a randomness based election model there is
@@ -45,15 +45,15 @@ This is why the paper is called
 
 > fait accompli /fĕt″ ä-kŏm-plē′, fāt″/ noun An accomplished, presumably irreversible deed or fact.
 
-Since a large proportion of the committee is fixed in advanced.
+Since a large proportion of the committee is fixed in advance.
 -}
 
--- | The function that calculated the sum of the stake of the remaining
+-- | The function that calculates the sum of the stake of the remaining
 -- `i` elements of the input. Defined in the paper in figure 6 on page 854.
 rho :: Int -> OrderedSetOfParties -> RelativeStake
 rho i = sum . drop i . map stake . parties
 
--- | Find the smallest `i` such that for `lst' = drop i lst`  either `rho i lst = 0`
+-- | Find the smallest `i` such that for `lst' = drop i lst` either `rho i lst = 0`
 -- or
 --
 --      `(1-\frac{lst' !! i }{rho i lst'})^2 >= \frac{n-i}{n-i+1}`
@@ -69,22 +69,22 @@ findIStar (OrderedSetOfParties lst n) = go 0 lst
     go i [] = i
     go i (x : xs)
       -- Note that the second condition here in the or statement
-      -- is a reduction "either $\rho_i=0$" in the paper. This because
+      -- is a reduction "either $\rho_i=0$" in the paper. This is because
       -- the input list is ordered. So, $\rho_i=0" <=> all remaining
       -- stake of the trailing elements in the list is zero <=>
-      -- the first element of the remaing list has zero stake.
+      -- the first element of the remaining list has zero stake.
       | stake x == 0 = i
       | (1 - f) * (1 - f) >= (n' - i') / (n' - i' + 1) = i
       | otherwise = go (i + 1) xs
       where
         -- If `snd x > 0` then `rho i (OrderedSetOfParties (x:xs)) > 0`
-        -- hence f is below is well-defined.
+        -- hence f below is well-defined.
         --
         -- TODO ---------
         -- This is currently O(n^2), better to use an
         -- accumulator and pass the total along minus `snd x`
         -- to prevent recalculating the remaining stake again and again.
-        -- Keeping it to semanticly match the paper for now
+        -- Keeping it to semantically match the paper for now
         f = stake x / rho i (OrderedSetOfParties (x : xs) n)
         -- note that for `i == n`, we have that
         -- `(1-f)^2` is trivially bigger or equal than zero.
@@ -93,11 +93,11 @@ findIStar (OrderedSetOfParties lst n) = go 0 lst
         n' = fromIntegral @CommitteeSize @RelativeStake n
         i' = fromIntegral @Int @RelativeStake i
 
--- | A type representing an Epoch-specific pool index
+-- | A type representing an epoch-specific pool index
 type PersistentVoterIndex = Word16
 
 -- | A type representing a persistent voter seat. The goal of fait accompli
--- is to assign more weight to large stakepools
+-- is to assign more weight to large stake pools
 data PersistentSeat = PersistentSeat
   { publicVoteKeyPersistent :: PublicKeyLeios 'Vote
   , weightPersistentSeat :: Weight
@@ -134,7 +134,7 @@ data NonPersistentLocalSortition = NonPersistentLocalSortition
   }
   deriving (Show)
 
--- | The per epoch selected committee for Leios
+-- | The per-epoch selected committee for Leios
 data CommitteeSelection = CommitteeSelection
   { persistentSeats :: PersistentSeats
   , nonPersistentVoters :: NonPersistentLocalSortition

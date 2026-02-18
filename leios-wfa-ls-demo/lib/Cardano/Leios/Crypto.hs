@@ -17,6 +17,7 @@ module Cardano.Leios.Crypto (
   EndorserBlockHash,
   KeyRoleLeios (..),
   PublicKeyLeios (..),
+  PrivateKeyLeios (..),
   checkVRFThreshold,
   verifyPossessionProofLeios,
   createPossessionProofLeios,
@@ -29,6 +30,8 @@ module Cardano.Leios.Crypto (
 
 import Cardano.Crypto.DSIGN
 
+import Cardano.Api.Ledger (KeyHash (..))
+import Cardano.Crypto.Hash (hashToBytes)
 import Cardano.Crypto.Util (SignableRepresentation)
 import Cardano.Leios.Types
 import Data.Coerce (coerce)
@@ -89,14 +92,15 @@ minSigPoPDST = BLS12381SignContext (Just "BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO
 class HasBLSContext (r :: KeyRoleLeios) where
   blsCtx :: Proxy r -> BLS12381SignContext
 
+-- TODO: make this polymorphic over network magic
 instance HasBLSContext 'Vote where
-  blsCtx _ = minSigSignatureDST {blsSignContextAug = Just "LEIOS:VOTE:MAINNET:V0"}
+  blsCtx _ = minSigSignatureDST {blsSignContextAug = Just "LEIOS:VOTE:MAINNET:V0:"}
 
 instance HasBLSContext 'VRF where
-  blsCtx _ = minSigSignatureDST {blsSignContextAug = Just "LEIOS:VRF:MAINNET:V0"}
+  blsCtx _ = minSigSignatureDST {blsSignContextAug = Just "LEIOS:VRF:MAINNET:V0:"}
 
 instance HasBLSContext 'PoP where
-  blsCtx _ = minSigPoPDST {blsSignContextAug = Just "LEIOS:POP:MAINNET:V0"}
+  blsCtx _ = minSigPoPDST {blsSignContextAug = Just "LEIOS:POP:MAINNET:V0:"}
 
 signWithRoleLeios ::
   forall r msg.
@@ -116,12 +120,20 @@ verifyWithRoleLeios ::
 verifyWithRoleLeios (PublicKeyLeios vk) msg (SignatureLeios sig) =
   verifyDSIGN (blsCtx (Proxy @r)) vk msg sig
 
-createPossessionProofLeios :: PrivateKeyLeios 'PoP -> PublicKeyPossessionProofLeios
-createPossessionProofLeios (PrivateKeyLeios sk) = createPossessionProofDSIGN (blsCtx (Proxy @'PoP)) sk
+-- | Create a Proof of Possesion for a pool with `PoolID` and a given `PrivateKeyLeios 'PoP`
+-- The binding to the pool id ensures that others cannot replay this PoP in their registration.
+createPossessionProofLeios :: PrivateKeyLeios 'PoP -> PoolID -> PublicKeyPossessionProofLeios
+createPossessionProofLeios (PrivateKeyLeios sk) pID = createPossessionProofDSIGN ctx' sk
+  where
+    ctx = blsCtx (Proxy @'PoP)
+    ctx' = ctx {blsSignContextAug = blsSignContextAug ctx <> Just ((hashToBytes . unKeyHash) pID)}
 
 verifyPossessionProofLeios ::
-  PublicKeyLeios 'PoP -> PublicKeyPossessionProofLeios -> Either String ()
-verifyPossessionProofLeios (PublicKeyLeios vk) = verifyPossessionProofDSIGN (blsCtx (Proxy @'PoP)) vk
+  PublicKeyLeios 'PoP -> PoolID -> PublicKeyPossessionProofLeios -> Either String ()
+verifyPossessionProofLeios (PublicKeyLeios vk) pID = verifyPossessionProofDSIGN ctx' vk
+  where
+    ctx = blsCtx (Proxy @'PoP)
+    ctx' = ctx {blsSignContextAug = blsSignContextAug ctx <> Just ((hashToBytes . unKeyHash) pID)}
 
 -- | Place holder vrf check
 checkVRFThreshold :: RelativeStake -> OutputVRF -> Either String Weight

@@ -1,18 +1,18 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NamedFieldPuns #-}
 
 module Cardano.Leios.Vote where
 
-import Cardano.Leios.Committee (PoolID)
+import Cardano.Crypto.Hash (hashToBytes)
+import Cardano.Crypto.Util (writeBinaryWord64)
 import Cardano.Leios.Crypto (
-  ElectionID,
-  EndorserBlockHash,
   OutputVRF,
   Vote,
-  Weight,
   checkVRFThreshold,
   coercePublicKeyLeios,
   verifyWithRoleLeios,
  )
+import Cardano.Leios.Types
 import Cardano.Leios.WeightedFaitAccompli (
   CommitteeSelection (..),
   NonPersistentLocalSortition (..),
@@ -42,12 +42,17 @@ data NonPersistentVote = NonPersistentVote
   , npvVoteSignature :: Vote
   }
 
--- | Verify a `LeiosVote`'s validity against and `ElectionID` for a given `EndorserblockHash`
+-- | Verify a `LeiosVote`'s validity against and `ElectionID` for a given `EndorserblockHash`, `PraosNonce`
 -- and a certain `CommitteeSelection`. If the vote is valid, this function returns the `Weight`
 -- that is associated with this vote.
 verifyLeiosVote ::
-  CommitteeSelection -> ElectionID -> EndorserBlockHash -> LeiosVote -> Either String Weight
-verifyLeiosVote CommitteeSelection {persistentSeats, nonPersistentVoters} eID ebHash vote = case vote of
+  CommitteeSelection ->
+  ElectionID ->
+  EndorserBlockHash ->
+  PraosNonce ->
+  LeiosVote ->
+  Either String Weight
+verifyLeiosVote CommitteeSelection {persistentSeats, nonPersistentVoters} eID ebHash nonce vote = case vote of
   LeiosPersistentVote pv@PersistentVote {pvPersistentVoterID = pvID} -> case Map.lookup pvID persistentSeats of
     Nothing -> Left "verifyLeiosVote: persistent voter ID not found in committee"
     Just seat -> do
@@ -55,7 +60,7 @@ verifyLeiosVote CommitteeSelection {persistentSeats, nonPersistentVoters} eID eb
       Right (weightPersistentSeat seat)
   LeiosNonPersistentVote npv@NonPersistentVote {npvPoolID = npvID} -> case Map.lookup npvID (voters nonPersistentVoters) of
     Nothing -> Left "verifyLeiosVote: non-persistent voter ID not found in committee"
-    Just voter -> verifyNonPersistentVote voter eID ebHash npv
+    Just voter -> verifyNonPersistentVote voter eID ebHash nonce npv
 
 -- | Verify a `PersistentVote`'s validity against and `ElectionID` for a given `EndorserblockHash`
 -- and a certain `PersistentSeat`.
@@ -72,22 +77,23 @@ verifyPersistentVote seat eID ebHash vote
 -- and a certain `NonPersistentVoter`. If the vote is valid, this function returns the `Weight`
 -- that is associated with this vote.
 verifyNonPersistentVote ::
-  NonPersistentVoter -> ElectionID -> EndorserBlockHash -> NonPersistentVote -> Either String Weight
-verifyNonPersistentVote voter eID ebHash vote
+  NonPersistentVoter ->
+  ElectionID ->
+  EndorserBlockHash ->
+  PraosNonce ->
+  NonPersistentVote ->
+  Either String Weight
+verifyNonPersistentVote voter eID ebHash nonce vote
   | eID /= npvElectionID vote =
       Left "verifyNonPersistentVote: election ID in vote does not match input election ID"
   | ebHash /= npvEndorserBlockHash vote =
       Left "verifyNonPersistentVote: EB hash in vote does not match input EB hash"
   | otherwise = do
-      let vk = publicVoteKeyNonPersistent voter
-          sig = npvVoteSignature vote
+      let pkVote = publicVoteKeyNonPersistent voter
           vrfOutput = npvEligibilitySignature vote
-          stake = stakeNonPersistentVoter voter
-      verifyWithRoleLeios vk ebHash sig
-      -- note that we currently do not add the praos randomness here
-      -- we should use something like
-      --
-      -- checkVRFOutput vk (PraosNonceAsBS <> (writeBinaryWord64 eID)) vrfOutput
-      --
-      verifyWithRoleLeios (coercePublicKeyLeios vk) eID vrfOutput
-      checkVRFThreshold stake vrfOutput
+      verifyWithRoleLeios pkVote ebHash (npvVoteSignature vote)
+      verifyWithRoleLeios
+        (coercePublicKeyLeios pkVote)
+        (writeBinaryWord64 nonce <> hashToBytes ebHash)
+        vrfOutput
+      checkVRFThreshold (stakeNonPersistentVoter voter) vrfOutput

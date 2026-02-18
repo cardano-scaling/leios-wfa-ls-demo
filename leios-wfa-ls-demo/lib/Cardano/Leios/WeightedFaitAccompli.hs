@@ -108,7 +108,7 @@ data NonPersistentVoter = NonPersistentVoter
   }
   deriving (Show)
 
-type NonPersistentVoters = Map.Map PoolID NonPersistentVoter
+type NonPersistentVoters = Map.Map PoolId NonPersistentVoter
 
 data NonPersistentLocalSortition = NonPersistentLocalSortition
   { voters :: NonPersistentVoters
@@ -155,7 +155,7 @@ wFA osp@(OrderedSetOfParties prts n) =
       NonPersistentLocalSortition
         { voters =
             Map.fromList
-              [ ( poolID p
+              [ ( poolId p
                 , NonPersistentVoter
                     { publicVoteKeyNonPersistent = publicVoteKey p
                     , stakeNonPersistentVoter = stake p

@@ -3,11 +3,12 @@
 
 module Cardano.Leios.Utils where
 
+import Cardano.Api (NetworkId)
 import Cardano.Api.Ledger (hashToBytes)
 import Cardano.Crypto.DSIGN
 import Cardano.Crypto.Seed (mkSeedFromBytes)
 import Cardano.Ledger.Hashes (KeyHash (..))
-import Cardano.Leios.Committee (Party (..), PoolID)
+import Cardano.Leios.Committee (Party (..), PoolId)
 import Cardano.Leios.Crypto (KeyRoleLeios (..), PublicKeyLeios (..))
 import qualified Data.ByteString as BS
 import Data.Data (Proxy (..))
@@ -21,16 +22,16 @@ toFixedLen n bs = BS.take n (bs <> BS.replicate n 0)
 -- to a bls signing key seed by appending zeros to make it length 32.
 -- This is nice for testing, as we can on the generate signatures
 -- for a pool easily while the ledger does not know about bls keys yet.
-toSeedForBLS :: PoolID -> Seed
+toSeedForBLS :: PoolId -> Seed
 toSeedForBLS = mkSeedFromBytes . toFixedLen seedLen . hashToBytes . unKeyHash
   where
     seedLen = fromIntegral (seedSizeDSIGN (Proxy @BLS12381MinSigDSIGN))
 
-toSkForBLS :: PoolID -> SignKeyDSIGN BLS12381MinSigDSIGN
+toSkForBLS :: PoolId -> SignKeyDSIGN BLS12381MinSigDSIGN
 toSkForBLS = genKeyDSIGN @BLS12381MinSigDSIGN . toSeedForBLS
 
-toVerKeyForBLS :: PoolID -> PublicKeyLeios 'Vote
-toVerKeyForBLS = PublicKeyLeios . deriveVerKeyDSIGN @BLS12381MinSigDSIGN . toSkForBLS
+toVerKeyForBLS :: PoolId -> NetworkId -> PublicKeyLeios 'Vote
+toVerKeyForBLS pId nId = PublicKeyLeios (nId, (deriveVerKeyDSIGN @BLS12381MinSigDSIGN . toSkForBLS) pId)
 
-createParties :: [(PoolID, Rational)] -> [Party]
-createParties = map (\(hsh, stk) -> Party hsh (toVerKeyForBLS hsh) stk)
+createParties :: NetworkId -> [(PoolId, Rational)] -> [Party]
+createParties nId = map (\(hsh, stk) -> Party hsh (toVerKeyForBLS hsh nId) stk)

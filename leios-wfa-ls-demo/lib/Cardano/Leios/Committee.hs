@@ -4,7 +4,7 @@
 module Cardano.Leios.Committee (
   CommitteeSize,
   Party (..),
-  PoolID,
+  PoolId,
   OrderedSetOfParties (..),
   mkOrderedSetOfParties,
 ) where
@@ -25,7 +25,7 @@ type CommitteeSize = Word16
 -- This type assumes that the public key is valid,
 -- e.g, the Proof of Possesion of this key has been checked.
 data Party = Party
-  { poolID :: PoolID
+  { poolId :: PoolId
   -- ^ The `poolId` is not strictly needed in this type
   --   keeping it for know as the bls key will be derived from it
   --   in tests
@@ -64,7 +64,7 @@ data MkOrderedSetOfPartiesError
   deriving (Show)
 
 -- | A function to safely construct a `OrderedSetOfParties` from a
--- list of stakepools identified by their `PoolID`,
+-- list of stakepools identified by their `PoolId`,
 -- their stake `Rational` and the `committeeSize`.
 --
 -- Note that we require the committee size to be smaller or equal

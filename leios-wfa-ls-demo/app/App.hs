@@ -2,12 +2,14 @@
 
 module Main (main) where
 
+import Cardano.Api (NetworkId (..), NetworkMagic (..))
 import Cardano.Leios.Committee
 import Cardano.Leios.Utils
 import Cardano.Leios.WeightedFaitAccompli
 import Cardano.Query
 import Cardano.Utils
 import qualified Data.Map.Strict as Map
+import Data.Word (Word32)
 import Options.Applicative
 import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr)
@@ -41,14 +43,20 @@ main = do
         (optsParser <**> helper)
         (fullDesc <> progDesc "Query a Cardano node for data")
 
-  let localNodeConnInfo = mkLocalNodeConnInfo (optTestnetMagic o) (optNodeSocket o) 0
+  let networkNr = optTestnetMagic o
+      localNodeConnInfo = mkLocalNodeConnInfo networkNr (optNodeSocket o) 0
   eMap <- queryPoolDistrMap localNodeConnInfo
   case eMap of
     Left err -> hPutStrLn stderr (renderQueryError err) >> exitFailure
     Right m -> do
       -- Note that on preview we have ~611 pools
+      -- on mainnet this is ~3000 where ~800 have ~80% of stake
       let commSize = 380 :: CommitteeSize
-          prts = createParties $ Map.toList m
+          nId =
+            if networkNr == 764824073
+              then Mainnet
+              else Testnet (NetworkMagic (fromIntegral @Int @Word32 networkNr)) :: NetworkId
+          prts = createParties nId $ Map.toList m
       case mkOrderedSetOfParties commSize prts of
         Left err ->
           hPutStrLn stderr $ "'mkOrderedSetOfParties' error: " <> show err

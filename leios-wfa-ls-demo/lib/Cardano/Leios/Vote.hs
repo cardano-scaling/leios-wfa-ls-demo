@@ -27,65 +27,65 @@ data LeiosVote = LeiosPersistentVote PersistentVote | LeiosNonPersistentVote Non
 
 -- | A `PersistentVote` signals that a `PersistentVoter` agrees with an `EndorserBlock`.
 data PersistentVote = PersistentVote
-  { pvElectionID :: ElectionID
-  , pvPersistentVoterID :: PersistentVoterIndex
+  { pvElectionId :: ElectionId
+  , pvPersistentVoterId :: PersistentVoterIndex
   , pvEndorserBlockHash :: EndorserBlockHash
   , pvVoteSignature :: Vote
   }
 
 -- | A `NonPersistentVote` signals that a `NonPersistentVoter` agrees with an `EndorserBlock`.
 data NonPersistentVote = NonPersistentVote
-  { npvElectionID :: ElectionID
-  , npvPoolID :: PoolID
+  { npvElectionId :: ElectionId
+  , npvPoolId :: PoolId
   , npvEligibilitySignature :: OutputVRF
   , npvEndorserBlockHash :: EndorserBlockHash
   , npvVoteSignature :: Vote
   }
 
--- | Verify a `LeiosVote`'s validity against and `ElectionID` for a given `EndorserblockHash`, `PraosNonce`
+-- | Verify a `LeiosVote`'s validity against and `ElectionId` for a given `EndorserblockHash`, `PraosNonce`
 -- and a certain `CommitteeSelection`. If the vote is valid, this function returns the `Weight`
 -- that is associated with this vote.
 verifyLeiosVote ::
   CommitteeSelection ->
-  ElectionID ->
+  ElectionId ->
   EndorserBlockHash ->
   PraosNonce ->
   LeiosVote ->
   Either String Weight
-verifyLeiosVote CommitteeSelection {persistentSeats, nonPersistentVoters} eID ebHash nonce vote = case vote of
-  LeiosPersistentVote pv@PersistentVote {pvPersistentVoterID = pvID} -> case Map.lookup pvID persistentSeats of
-    Nothing -> Left "verifyLeiosVote: persistent voter ID not found in committee"
+verifyLeiosVote CommitteeSelection {persistentSeats, nonPersistentVoters} eId ebHash nonce vote = case vote of
+  LeiosPersistentVote pv@PersistentVote {pvPersistentVoterId = pvId} -> case Map.lookup pvId persistentSeats of
+    Nothing -> Left "verifyLeiosVote: persistent voter Id not found in committee"
     Just seat -> do
-      verifyPersistentVote seat eID ebHash pv
+      verifyPersistentVote seat eId ebHash pv
       Right (weightPersistentSeat seat)
-  LeiosNonPersistentVote npv@NonPersistentVote {npvPoolID = npvID} -> case Map.lookup npvID (voters nonPersistentVoters) of
-    Nothing -> Left "verifyLeiosVote: non-persistent voter ID not found in committee"
-    Just voter -> verifyNonPersistentVote voter eID ebHash nonce npv
+  LeiosNonPersistentVote npv@NonPersistentVote {npvPoolId = npvId} -> case Map.lookup npvId (voters nonPersistentVoters) of
+    Nothing -> Left "verifyLeiosVote: non-persistent voter Id not found in committee"
+    Just voter -> verifyNonPersistentVote voter eId ebHash nonce npv
 
--- | Verify a `PersistentVote`'s validity against and `ElectionID` for a given `EndorserblockHash`
+-- | Verify a `PersistentVote`'s validity against and `ElectionId` for a given `EndorserblockHash`
 -- and a certain `PersistentSeat`.
 verifyPersistentVote ::
-  PersistentSeat -> ElectionID -> EndorserBlockHash -> PersistentVote -> Either String ()
-verifyPersistentVote seat eID ebHash vote
-  | eID /= pvElectionID vote =
-      Left "verifyPersistentVote: election ID in vote does not match input election ID"
+  PersistentSeat -> ElectionId -> EndorserBlockHash -> PersistentVote -> Either String ()
+verifyPersistentVote seat eId ebHash vote
+  | eId /= pvElectionId vote =
+      Left "verifyPersistentVote: election Id in vote does not match input election Id"
   | ebHash /= pvEndorserBlockHash vote =
       Left "verifyPersistentVote: EB hash in vote does not match input EB hash"
   | otherwise = verifyWithRoleLeios (publicVoteKeyPersistent seat) ebHash (pvVoteSignature vote)
 
--- | Verify a `NonPersistentVote`'s validity against and `ElectionID` for a given `EndorserblockHash`
+-- | Verify a `NonPersistentVote`'s validity against and `ElectionId` for a given `EndorserblockHash`
 -- and a certain `NonPersistentVoter`. If the vote is valid, this function returns the `Weight`
 -- that is associated with this vote.
 verifyNonPersistentVote ::
   NonPersistentVoter ->
-  ElectionID ->
+  ElectionId ->
   EndorserBlockHash ->
   PraosNonce ->
   NonPersistentVote ->
   Either String Weight
-verifyNonPersistentVote voter eID ebHash nonce vote
-  | eID /= npvElectionID vote =
-      Left "verifyNonPersistentVote: election ID in vote does not match input election ID"
+verifyNonPersistentVote voter eId ebHash nonce vote
+  | eId /= npvElectionId vote =
+      Left "verifyNonPersistentVote: election Id in vote does not match input election Id"
   | ebHash /= npvEndorserBlockHash vote =
       Left "verifyNonPersistentVote: EB hash in vote does not match input EB hash"
   | otherwise = do

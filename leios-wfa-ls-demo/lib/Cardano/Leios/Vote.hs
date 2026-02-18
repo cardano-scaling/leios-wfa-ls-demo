@@ -3,6 +3,7 @@
 
 module Cardano.Leios.Vote where
 
+import Cardano.Api (PraosNonce, serialiseToRawBytes)
 import Cardano.Crypto.Hash (hashToBytes)
 import Cardano.Crypto.Util (writeBinaryWord64)
 import Cardano.Leios.Crypto (
@@ -42,17 +43,16 @@ data NonPersistentVote = NonPersistentVote
   , npvVoteSignature :: Vote
   }
 
--- | Verify a `LeiosVote`'s validity against and `ElectionId` for a given `EndorserblockHash`, `PraosNonce`
+-- | Verify a `LeiosVote`'s validity against and `ElectionId` for a given `EndorserblockHash`
 -- and a certain `CommitteeSelection`. If the vote is valid, this function returns the `Weight`
 -- that is associated with this vote.
 verifyLeiosVote ::
   CommitteeSelection ->
   ElectionId ->
   EndorserBlockHash ->
-  PraosNonce ->
   LeiosVote ->
   Either String Weight
-verifyLeiosVote CommitteeSelection {persistentSeats, nonPersistentVoters} eId ebHash nonce vote = case vote of
+verifyLeiosVote CommitteeSelection {persistentSeats, nonPersistentVoters, praosNonce} eId ebHash vote = case vote of
   LeiosPersistentVote pv@PersistentVote {pvPersistentVoterId = pvId} -> case Map.lookup pvId persistentSeats of
     Nothing -> Left "verifyLeiosVote: persistent voter Id not found in committee"
     Just seat -> do
@@ -60,7 +60,7 @@ verifyLeiosVote CommitteeSelection {persistentSeats, nonPersistentVoters} eId eb
       Right (weightPersistentSeat seat)
   LeiosNonPersistentVote npv@NonPersistentVote {npvPoolId = npvId} -> case Map.lookup npvId (voters nonPersistentVoters) of
     Nothing -> Left "verifyLeiosVote: non-persistent voter Id not found in committee"
-    Just voter -> verifyNonPersistentVote voter eId ebHash nonce npv
+    Just voter -> verifyNonPersistentVote voter eId ebHash praosNonce npv
 
 -- | Verify a `PersistentVote`'s validity against and `ElectionId` for a given `EndorserblockHash`
 -- and a certain `PersistentSeat`.
@@ -94,6 +94,6 @@ verifyNonPersistentVote voter eId ebHash nonce vote
       verifyWithRoleLeios pkVote ebHash (npvVoteSignature vote)
       verifyWithRoleLeios
         (coercePublicKeyLeios pkVote)
-        (writeBinaryWord64 nonce <> hashToBytes ebHash)
+        (serialiseToRawBytes nonce <> writeBinaryWord64 eId)
         vrfOutput
       checkVRFThreshold (stakeNonPersistentVoter voter) vrfOutput

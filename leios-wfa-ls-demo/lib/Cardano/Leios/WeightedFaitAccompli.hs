@@ -13,6 +13,7 @@ module Cardano.Leios.WeightedFaitAccompli (
   rho,
 ) where
 
+import Cardano.Api (PraosNonce)
 import Cardano.Leios.Committee
 import Cardano.Leios.Crypto
 import qualified Data.Map as Map
@@ -116,17 +117,20 @@ data NonPersistentLocalSortition = NonPersistentLocalSortition
   }
   deriving (Show)
 
+-- | The per epoch selected committee for Leios
 data CommitteeSelection = CommitteeSelection
   { persistentSeats :: PersistentSeats
   , nonPersistentVoters :: NonPersistentLocalSortition
+  , praosNonce :: PraosNonce
   }
   deriving (Show)
 
-wFA :: OrderedSetOfParties -> CommitteeSelection
-wFA osp@(OrderedSetOfParties prts n) =
+wFA :: PraosNonce -> OrderedSetOfParties -> CommitteeSelection
+wFA nonce osp@(OrderedSetOfParties prts n) =
   CommitteeSelection
     { persistentSeats = persSeats
     , nonPersistentVoters = nonPersVoters
+    , praosNonce = nonce
     }
   where
     iStar = findIStar osp

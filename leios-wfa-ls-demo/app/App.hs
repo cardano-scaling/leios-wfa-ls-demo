@@ -3,11 +3,13 @@
 module Main (main) where
 
 import Cardano.Api (NetworkId (..), NetworkMagic (..))
+import Cardano.Api.Shelley (makePraosNonce)
 import Cardano.Leios.Committee
 import Cardano.Leios.Utils
 import Cardano.Leios.WeightedFaitAccompli
 import Cardano.Query
 import Cardano.Utils
+import qualified Data.ByteString.Char8 as BSC
 import qualified Data.Map.Strict as Map
 import Data.Word (Word32)
 import Options.Applicative
@@ -61,7 +63,8 @@ main = do
         Left err ->
           hPutStrLn stderr $ "'mkOrderedSetOfParties' error: " <> show err
         Right pools -> do
-          let committee = wFA pools
+          let epochNonce = makePraosNonce $ BSC.pack "some-random-nonce"
+              committee = wFA epochNonce pools
               numPersistent =
                 (Map.size . persistentSeats) committee
               sumStakePersistentSeats :: Double

@@ -4,13 +4,18 @@
 module Cardano.Leios.Vote where
 
 import Cardano.Api (PraosNonce, serialiseToRawBytes)
-import Cardano.Crypto.Hash (hashToBytes)
+import Cardano.Crypto.DSIGN (DSIGNAlgorithm (deriveVerKeyDSIGN))
 import Cardano.Crypto.Util (writeBinaryWord64)
 import Cardano.Leios.Crypto (
+  KeyRoleLeios (..),
   OutputVRF,
+  PrivateKeyLeios (..),
+  PublicKeyLeios (PublicKeyLeios),
   Vote,
   checkVRFThreshold,
+  coercePrivateKeyLeios,
   coercePublicKeyLeios,
+  signWithRoleLeios,
   verifyWithRoleLeios,
  )
 import Cardano.Leios.Types
@@ -20,6 +25,8 @@ import Cardano.Leios.WeightedFaitAccompli (
   NonPersistentVoter (..),
   PersistentSeat (..),
   PersistentVoterIndex,
+  findNonPersistentVoterByPublicKey,
+  findPersistentSeatByPublicKey,
  )
 import qualified Data.Map as Map
 
@@ -97,3 +104,52 @@ verifyNonPersistentVote voter eId ebHash nonce vote
         (serialiseToRawBytes nonce <> writeBinaryWord64 eId)
         vrfOutput
       checkVRFThreshold (stakeNonPersistentVoter voter) vrfOutput
+
+createPersistentVote ::
+  CommitteeSelection ->
+  PrivateKeyLeios 'Vote ->
+  ElectionId ->
+  EndorserBlockHash ->
+  Either String PersistentVote
+createPersistentVote committee privKey@(PrivateKeyLeios (nId, sk)) eId ebHash = case findPersistentSeatByPublicKey pk (persistentSeats committee) of
+  Nothing -> Left "createPersistentVote: no persistent seat found for this key"
+  Just (pIx, _) ->
+    Right $
+      PersistentVote
+        { pvElectionId = eId
+        , pvPersistentVoterId = pIx
+        , pvEndorserBlockHash = ebHash
+        , pvVoteSignature = signWithRoleLeios ebHash privKey
+        }
+  where
+    pk = PublicKeyLeios (nId, deriveVerKeyDSIGN sk) :: PublicKeyLeios 'Vote
+
+createNonPersistentVote ::
+  PraosNonce ->
+  CommitteeSelection ->
+  PrivateKeyLeios 'Vote ->
+  ElectionId ->
+  EndorserBlockHash ->
+  Either String NonPersistentVote
+createNonPersistentVote nonce commitee privKey@(PrivateKeyLeios (nId, sk)) eId ebHash = case findNonPersistentVoterByPublicKey pk vtrs of
+  Nothing -> Left "createNonPersistentVote: no non-persistent voter found for this key"
+  Just (pId, npv) ->
+    let npvRelativeStake = stakeNonPersistentVoter npv
+        outputVRF =
+          signWithRoleLeios
+            (serialiseToRawBytes nonce <> writeBinaryWord64 eId)
+            (coercePrivateKeyLeios privKey)
+     in case checkVRFThreshold npvRelativeStake outputVRF of
+          Left err -> Left err
+          Right _ ->
+            Right $
+              NonPersistentVote
+                { npvElectionId = eId
+                , npvPoolId = pId
+                , npvEligibilitySignature = outputVRF
+                , npvEndorserBlockHash = ebHash
+                , npvVoteSignature = signWithRoleLeios ebHash privKey
+                }
+  where
+    vtrs = voters . nonPersistentVoters $ commitee
+    pk = PublicKeyLeios (nId, deriveVerKeyDSIGN sk) :: PublicKeyLeios 'Vote

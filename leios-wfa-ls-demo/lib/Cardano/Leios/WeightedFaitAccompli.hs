@@ -9,6 +9,8 @@ module Cardano.Leios.WeightedFaitAccompli (
   PersistentSeat (..),
   NonPersistentLocalSortition (..),
   PersistentVoterIndex,
+  findNonPersistentVoterByPublicKey,
+  findPersistentSeatByPublicKey,
   wFA,
   rho,
 ) where
@@ -16,6 +18,7 @@ module Cardano.Leios.WeightedFaitAccompli (
 import Cardano.Api (PraosNonce)
 import Cardano.Leios.Committee
 import Cardano.Leios.Crypto
+import Data.List (find)
 import qualified Data.Map as Map
 import Data.Word (Word16)
 
@@ -103,6 +106,13 @@ data PersistentSeat = PersistentSeat
 
 type PersistentSeats = Map.Map PersistentVoterIndex PersistentSeat
 
+findPersistentSeatByPublicKey ::
+  PublicKeyLeios 'Vote ->
+  PersistentSeats ->
+  Maybe (PersistentVoterIndex, PersistentSeat)
+findPersistentSeatByPublicKey pk =
+  find (\(_, v) -> publicVoteKeyPersistent v == pk) . Map.toList
+
 data NonPersistentVoter = NonPersistentVoter
   { publicVoteKeyNonPersistent :: PublicKeyLeios 'Vote
   , stakeNonPersistentVoter :: RelativeStake
@@ -110,6 +120,13 @@ data NonPersistentVoter = NonPersistentVoter
   deriving (Show)
 
 type NonPersistentVoters = Map.Map PoolId NonPersistentVoter
+
+findNonPersistentVoterByPublicKey ::
+  PublicKeyLeios 'Vote ->
+  NonPersistentVoters ->
+  Maybe (PoolId, NonPersistentVoter)
+findNonPersistentVoterByPublicKey pk =
+  find (\(_, v) -> publicVoteKeyNonPersistent v == pk) . Map.toList
 
 data NonPersistentLocalSortition = NonPersistentLocalSortition
   { voters :: NonPersistentVoters

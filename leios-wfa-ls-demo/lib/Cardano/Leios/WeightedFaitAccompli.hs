@@ -11,6 +11,8 @@ module Cardano.Leios.WeightedFaitAccompli (
   PersistentVoterIndex,
   findNonPersistentVoterByPublicKey,
   findPersistentSeatByPublicKey,
+  findIStar,
+  findIStarAcc,
   wFA,
   rho,
 ) where
@@ -49,27 +51,27 @@ Since a large proportion of the committee is fixed in advance.
 -}
 
 -- | The function that calculates the sum of the stake of the remaining
--- `i` elements of the input. Defined in the paper in figure 6 on page 854.
+-- elements from index `i` onwards. Defined in the paper in figure 6 on page 854.
 rho :: Int -> OrderedSetOfParties -> RelativeStake
 rho i = sum . drop i . map stake . parties
 
--- | Find the smallest `i` such that for `lst' = drop i lst` either `rho i lst = 0`
+-- | Find the smallest `i` such that for `partyList' = drop i partyList` either `rho i partyList = 0`
 -- or
 --
---      `(1-\frac{lst' !! i }{rho i lst'})^2 >= \frac{n-i}{n-i+1}`
+--      `(1-\frac{partyList' !! i }{rho i partyList'})^2 >= \frac{n-i}{n-i+1}`
 --
 -- Note that due to this function ordering the inputs of the list
 -- from large to small stake, the first check is equivalent to having
--- the remaining stake in `lst'` being zero.
+-- the remaining stake in `partyList'` being zero.
 findIStar :: OrderedSetOfParties -> Int
 findIStar (OrderedSetOfParties [] _) = 0
-findIStar (OrderedSetOfParties lst n) = go 0 lst
+findIStar osp@(OrderedSetOfParties partyList n) = go 0 partyList
   where
     -- This case is never reached, added to make the function total to be sure.
     go i [] = i
     go i (x : xs)
       -- Note that the second condition here in the or statement
-      -- is a reduction "either $\rho_i=0$" in the paper. This is because
+      -- reduces to "either $\rho_i=0$" in the paper. This is because
       -- the input list is ordered. So, $\rho_i=0" <=> all remaining
       -- stake of the trailing elements in the list is zero <=>
       -- the first element of the remaining list has zero stake.
@@ -80,12 +82,33 @@ findIStar (OrderedSetOfParties lst n) = go 0 lst
         -- If `snd x > 0` then `rho i (OrderedSetOfParties (x:xs)) > 0`
         -- hence f below is well-defined.
         --
-        -- TODO ---------
-        -- This is currently O(n^2), better to use an
-        -- accumulator and pass the total along minus `snd x`
-        -- to prevent recalculating the remaining stake again and again.
-        -- Keeping it to semantically match the paper for now
-        f = stake x / rho i (OrderedSetOfParties (x : xs) n)
+        -- NOTE:
+        -- This is currently O(n^2). See `findIStarAcc` for an
+        -- accumulator-based O(n) implementation.
+        f = stake x / rho i osp
+        -- note that for `i == n`, we have that
+        -- `(1-f)^2` is trivially bigger or equal than zero.
+        -- This implies that the case `n' + 1 == i'`
+        -- is never reached and thus the divisor is never zero.
+        n' = fromIntegral @CommitteeSize @RelativeStake n
+        i' = fromIntegral @Int @RelativeStake i
+
+-- | Accumulator-based `findIStar` running in O(n).
+findIStarAcc :: OrderedSetOfParties -> Int
+findIStarAcc (OrderedSetOfParties [] _) = 0
+findIStarAcc (OrderedSetOfParties partyList n) = go 0 partyList totalStake
+  where
+    totalStake = sum (map stake partyList)
+
+    -- This case is never reached, added to make the function total to be sure.
+    go i [] _ = i
+    go i (x : xs) remainingStake
+      | stake x == 0 = i
+      | (1 - f) * (1 - f) >= (n' - i') / (n' - i' + 1) = i
+      | otherwise = go (i + 1) xs (remainingStake - stake x)
+      where
+        -- If `stake x > 0` then `remainingStake > 0` hence `f` is well-defined.
+        f = stake x / remainingStake
         -- note that for `i == n`, we have that
         -- `(1-f)^2` is trivially bigger or equal than zero.
         -- This implies that the case `n' + 1 == i'`
@@ -150,7 +173,7 @@ wFA nonce osp@(OrderedSetOfParties prts n) =
     , praosNonce = nonce
     }
   where
-    iStar = findIStar osp
+    iStar = findIStarAcc osp
 
     -- Note that the paper appoints pools `i \in [0, .. (i*-1)]
     -- to be persistent voters

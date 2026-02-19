@@ -53,7 +53,7 @@ main = do
     Right m -> do
       -- Note that on preview we have ~611 pools
       -- on mainnet this is ~3000 where ~800 have ~80% of stake
-      let targetCommitteeSize = 380 :: CommitteeSize
+      let targetCommitteeSize = 500 :: CommitteeSize
           nId =
             if networkMagic == 764824073
               then Mainnet
@@ -83,7 +83,7 @@ main = do
               <> printf "%.2f%%" (100 * sumStakePersistentSeats)
               <> ")"
           putStrLn $
-            "Non-persistent voters: "
+            "Non-persistent candidates: "
               <> show numNonPersistent
               <> " (stake per seat: "
               <> printf "%.2f%%" (100 * stakePerNonPersistentSeat)

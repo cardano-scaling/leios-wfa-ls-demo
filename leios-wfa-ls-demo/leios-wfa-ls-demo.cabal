@@ -52,6 +52,18 @@ executable exec
     ouroboros-consensus-cardano,
     transformers,
 
+test-suite tests
+  import: lang
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  hs-source-dirs: test
+  build-depends:
+    base >=4.9 && <5,
+    leios-wfa-ls-demo,
+    QuickCheck,
+    tasty,
+    tasty-quickcheck,
+
 -- benchmark bench
 --   type: exitcode-stdio-1.0
 --   main-is: Bench.hs

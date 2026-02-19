@@ -70,8 +70,8 @@ newtype SignatureLeios (r :: KeyRoleLeios)
 -- | The vote of a `Party` that signals endorsement with an EB
 type Vote = SignatureLeios 'Vote
 
--- | The VRF output that is used to deterministically let a voting party
--- pick a random uniform distribution value between 0 and `2^384`.
+-- | The VRF output that is used by a voting party to derive a
+-- verifiably random value uniformly distributed between 0 and `2^384`.
 type OutputVRF = SignatureLeios 'VRF
 
 -- | The proof of possession of any `PublicVoteKeyLeios r`

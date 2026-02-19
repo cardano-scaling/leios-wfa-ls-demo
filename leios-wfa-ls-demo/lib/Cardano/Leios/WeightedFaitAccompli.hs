@@ -48,6 +48,12 @@ This is why the paper is called
 > fait accompli /fĕt″ ä-kŏm-plē′, fāt″/ noun An accomplished, presumably irreversible deed or fact.
 
 Since a large proportion of the committee is fixed in advance.
+
+Implementation notes:
+- The paper uses 1-based indexing for party indices (p₁, p₂, ..., pᵢ*)
+- This implementation uses Haskell's 0-based indexing
+- Paper's i* corresponds to (iStar + 1) when converting between the two conventions
+- Therefore, n₁ = i* - 1 = iStar persistent seats are assigned
 -}
 
 -- | The function that calculates the sum of the stake of the remaining
@@ -174,11 +180,12 @@ wFA nonce osp@(OrderedSetOfParties prts n) =
     }
   where
     iStar = findIStarAcc osp
-
-    -- Note that the paper appoints pools `i \in [0, .. (i*-1)]
-    -- to be persistent voters
-    i = max 0 $ iStar - 1
-    (persistent, nonPersistent) = splitAt i prts
+    -- Note on indexing: The paper uses 1-based indexing where i* is the party index,
+    -- while this implementation uses 0-based Haskell indexing. Therefore:
+    --   - Paper's i* (1-based party number) = Haskell's iStar + 1
+    --   - Paper's n₁ = i* - 1 (persistent seats) = Haskell's iStar
+    -- We assign persistent seats to parties at indices [0..iStar-1] (iStar parties total).
+    (persistent, nonPersistent) = splitAt iStar prts
     n2 =
       fromIntegral @CommitteeSize @RelativeStake n - fromIntegral @Int @RelativeStake (length persistent)
 

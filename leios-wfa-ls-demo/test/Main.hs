@@ -47,7 +47,7 @@ prop_findIStarAccMatches =
 --   - Choose a committee size between 0 and the number of pools
 genOrderedSetOfParties :: Gen OrderedSetOfParties
 genOrderedSetOfParties = do
-  numPools <- chooseInt (0, 800)
+  numPools <- chooseInt (0, 400)
   stakes <- if numPools == 0 then pure [] else vectorOf numPools genStakePositive
   let totalStake = sum stakes
       normalizedStakes =

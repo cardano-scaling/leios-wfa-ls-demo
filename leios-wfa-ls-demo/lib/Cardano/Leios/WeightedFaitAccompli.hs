@@ -73,16 +73,20 @@ findIStar :: OrderedSetOfParties -> Int
 findIStar (OrderedSetOfParties [] _) = 0
 findIStar osp@(OrderedSetOfParties partyList n) = go 0 partyList
   where
+    n' = fromIntegral @CommitteeSize @RelativeStake n
     -- This case is never reached, added to make the function total to be sure.
     go i [] = i
     go i (x : xs)
+      -- Note that if `i >= n`, we have reached the target committee size
+      | i' >= n' = i
       -- Note that the second condition here in the or statement
       -- reduces to "either $\rho_i=0$" in the paper. This is because
       -- the input list is ordered. So, $\rho_i=0" <=> all remaining
       -- stake of the trailing elements in the list is zero <=>
       -- the first element of the remaining list has zero stake.
       | stake x == 0 = i
-      | (1 - f) * (1 - f) >= (n' - i') / (n' - i' + 1) = i
+      -- note that this differs from the paper, as we used 0 based indexes
+      | (1 - f) * (1 - f) >= (n' - i' - 1) / (n' - i') = i
       | otherwise = go (i + 1) xs
       where
         -- If `snd x > 0` then `rho i (OrderedSetOfParties (x:xs)) > 0`
@@ -92,11 +96,6 @@ findIStar osp@(OrderedSetOfParties partyList n) = go 0 partyList
         -- This is currently O(n^2). See `findIStarAcc` for an
         -- accumulator-based O(n) implementation.
         f = stake x / rho i osp
-        -- note that for `i == n`, we have that
-        -- `(1-f)^2` is trivially bigger or equal than zero.
-        -- This implies that the case `n' + 1 == i'`
-        -- is never reached and thus the divisor is never zero.
-        n' = fromIntegral @CommitteeSize @RelativeStake n
         i' = fromIntegral @Int @RelativeStake i
 
 -- | Accumulator-based `findIStar` running in O(n).
@@ -105,21 +104,19 @@ findIStarAcc (OrderedSetOfParties [] _) = 0
 findIStarAcc (OrderedSetOfParties partyList n) = go 0 partyList totalStake
   where
     totalStake = sum (map stake partyList)
+    n' = fromIntegral @CommitteeSize @RelativeStake n
 
     -- This case is never reached, added to make the function total to be sure.
     go i [] _ = i
     go i (x : xs) remainingStake
+      -- Note that if `i >= n`, we have reached the target committee size
+      | i' >= n' = i
       | stake x == 0 = i
-      | (1 - f) * (1 - f) >= (n' - i') / (n' - i' + 1) = i
+      | (1 - f) * (1 - f) >= (n' - i' - 1) / (n' - i') = i
       | otherwise = go (i + 1) xs (remainingStake - stake x)
       where
         -- If `stake x > 0` then `remainingStake > 0` hence `f` is well-defined.
         f = stake x / remainingStake
-        -- note that for `i == n`, we have that
-        -- `(1-f)^2` is trivially bigger or equal than zero.
-        -- This implies that the case `n' + 1 == i'`
-        -- is never reached and thus the divisor is never zero.
-        n' = fromIntegral @CommitteeSize @RelativeStake n
         i' = fromIntegral @Int @RelativeStake i
 
 -- | A type representing an epoch-specific pool index

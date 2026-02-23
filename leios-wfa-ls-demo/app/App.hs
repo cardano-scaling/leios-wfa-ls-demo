@@ -52,8 +52,8 @@ main = do
     Left err -> hPutStrLn stderr (renderQueryError err) >> exitFailure
     Right m -> do
       -- Note that on preview we have ~611 pools
-      -- on mainnet this is ~3000 where ~800 have ~80% of stake
-      let targetCommitteeSize = 500 :: CommitteeSize
+      -- on mainnet this is ~3000
+      let targetCommitteeSize = 575 :: CommitteeSize
           nId =
             if networkMagic == 764824073
               then Mainnet
@@ -75,6 +75,7 @@ main = do
               stakePerNonPersistentSeat = (fromRational . weightPerNonPersistentSeat . nonPersistentVoters) committee
 
           writeStakeCSV "stake.csv" numPersistent (fromIntegral @CommitteeSize @Int targetCommitteeSize) pools
+          writeStakeCBOR "stake.cbor" 10000000 pools
           putStrLn $ "Target committee size  " <> show targetCommitteeSize
           putStrLn $
             "Persistent voters:     "

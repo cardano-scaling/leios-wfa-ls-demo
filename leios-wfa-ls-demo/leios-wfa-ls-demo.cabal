@@ -26,11 +26,13 @@ library
 
   build-depends:
     base >=4.9 && <5,
+    base16-bytestring,
     bytestring,
     cardano-api ^>=10.16,
     cardano-crypto-class,
     cardano-ledger-core,
     cardano-protocol-tpraos,
+    cborg,
     containers,
     errors,
     ouroboros-consensus-cardano,
@@ -58,9 +60,9 @@ test-suite tests
   main-is: Main.hs
   hs-source-dirs: test
   build-depends:
+    QuickCheck,
     base >=4.9 && <5,
     leios-wfa-ls-demo,
-    QuickCheck,
     tasty,
     tasty-quickcheck,
 

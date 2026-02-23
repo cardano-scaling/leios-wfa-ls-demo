@@ -1,7 +1,8 @@
 module Cardano.Leios.LocalSortition where
-import Cardano.Crypto.VRF (OutputVRF)
-import Cardano.Leios.Types (RelativeStake)
-import Cardano.Protocol.TPraos.BHeader (BoundedNatural)
+
+-- import Cardano.Crypto.VRF (OutputVRF)
+-- import Cardano.Leios.Types (RelativeStake)
+-- import Cardano.Protocol.TPraos.BHeader (BoundedNatural)
 
 {-
 Some notes on local sortition using a random variable `X ~ Poisson(\lambda)`
@@ -15,7 +16,7 @@ win each slot with probability f = 0.05 (or rate). That is, using a repeated Ber
 
 P("Pool with all stake wins") = 1 - P("Pool has no ticket that wins")
                               = 1 - (1-x)^totalActiveStake
-                              = f 
+                              = f
 
 where x is the chance that one ticket wins. If we solve for x we get that
 
@@ -55,7 +56,7 @@ on average that n2 non-persistent voters win the right to endorse an EB via a Po
 Now since we have that for X_i ~ Poisson(λ_i) that E[X_i] = λ_i and that \Sum_i X_i ~ Poisson(\Sum λ_i).
 
 Combine this with the fact that we desire that more stake wins you proportionally more seats, we have
-that by the desire that 
+that by the desire that
 
 E[X_totalSeats] = E[\Sum_i λ_i] = n2
 
@@ -72,7 +73,7 @@ P(X=(k+1)) = ( e^(-λ) * λ^(k+1) ) / (k+1)!
            = ( e^(-λ) * λ^k * λ ) / (k! * (k+1))
            = P(X = k) * (λ / (k+1))
 
-So if we initially calculate P(X=1) and compare 
+So if we initially calculate P(X=1) and compare
 
 p < (n2 * σ) * e^(-n2*σ) <=> p / (n2 * σ) < e^(-n2*σ)
 
@@ -92,6 +93,12 @@ wins k seats : k*(prev)/λ       < e^(-λ)
 where each check reuses the previous ratio value.
 
 This way, we can compute the Taylor expansion once, and do cheap rational arithmetic recursively
-until the comparison does not hold any more.
+until the comparison does not hold any more. Also note that in the above, the real check should be
+
+wins 1 seat  :          p       < λ * e^(-λ)         where λ = n2 * σ
+wins 2 seats :          p       < (λ^2 * e^(-λ)) / 2
+wins 3 seats :       3b/λ = c   < (λ^3 * e^(-λ)) / (2*3)
+...
+wins k seats : k*(prev)/λ       < (λ^k * e^(-λ)) / (k)
 
 -}

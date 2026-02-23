@@ -17,6 +17,7 @@ library
     Cardano.Leios.Committee
     Cardano.Leios.Crypto
     Cardano.Leios.LocalSortition
+    Cardano.Leios.NonIntegral
     Cardano.Leios.Types
     Cardano.Leios.Utils
     Cardano.Leios.Vote

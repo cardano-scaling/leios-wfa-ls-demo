@@ -60,6 +60,10 @@ test-suite tests
   type: exitcode-stdio-1.0
   main-is: Main.hs
   hs-source-dirs: test
+  other-modules:
+    Test.Cardano.Leios.NonIntegral
+    Test.Cardano.Leios.WeightedFaitAccompli
+
   build-depends:
     QuickCheck,
     base >=4.9 && <5,

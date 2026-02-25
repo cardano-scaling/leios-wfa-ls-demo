@@ -1,4 +1,22 @@
+{-# LANGUAGE TypeApplications #-}
+
 module Cardano.Leios.LocalSortition where
+
+import Cardano.Ledger.BaseTypes (FixedPoint)
+import Cardano.Leios.Crypto
+import Cardano.Leios.NonIntegral (taylorExpCmpFirstNonLower)
+import Cardano.Protocol.TPraos.BHeader (BoundedNatural (..), assertBoundedNatural)
+import Data.Maybe (fromMaybe)
+import GHC.Real ((%))
+import Numeric.Natural ()
+
+-- import Cardano.Leios.Crypto (OutputVRF)
+-- import Cardano.Protocol.TPraos.BHeader (assertBoundedNatural, BoundedNatural)
+-- import Numeric.Natural (Natural)
+
+-- import Data.Array.Byte (ByteArray)
+-- import Data.ByteString (ByteString)
+-- import Data.Data (Proxy)
 
 -- import Cardano.Crypto.VRF (OutputVRF)
 -- import Cardano.Leios.Types (RelativeStake)
@@ -55,19 +73,28 @@ on average that n2 non-persistent voters win the right to endorse an EB via a Po
 
 Now since we have that for X_i ~ Poisson(λ_i) that E[X_i] = λ_i and that \Sum_i X_i ~ Poisson(\Sum λ_i).
 
-Combine this with the fact that we desire that more stake wins you proportionally more seats, we have
-that by the desire that
+Combine this with the fact that we desire that more stake wins you proportionally more seats, we should
+aim for
 
-E[X_totalSeats] = E[\Sum_i λ_i] = n2
+E[X_totalSeats] = λ_total = E[\Sum_i X_i] = \Sum_i λ_i = n2
 
-giving that we require λ_i = σ_i * n2 (where σ_i is the stake of each party).
-We conclude that for a single pool that holds σ stake that λ = σ * n2
+which is a similar constraint to the above x = 1 - (1 - f)^(1/totalActiveStake), it tells
+us how to set λ_i.
+
+Note that if we define λ_i = σ_i * n2 (where σ_i is the stake of each party), we get that
+
+λ_total = Sum_i λ_i = Sum_i (σ_i * n2) = n2 * \Sum_i σ_i = n2
+
+So, in our calculation we define for a single pool that holds σ stake that its rate is λ = σ * n2
 
 Then similarly to the VRF argument for Praos we check that a pool wins k seats if
 
+p < P("Pool with stake σ winst k seats")
+
 p < (n2 * σ)^k * e^(-n2*σ) / (k!) <=> (p * k!) / (n2 * σ)^k < e^(-n2*σ)
 
-the latter exponential can be compared in a similar fashion. Moreover, given that
+the latter exponential can be compared in a similar fashion to what is done in Praos.
+Moreover, given that
 
 P(X=(k+1)) = ( e^(-λ) * λ^(k+1) ) / (k+1)!
            = ( e^(-λ) * λ^k * λ ) / (k! * (k+1))
@@ -93,12 +120,36 @@ wins k seats : k*(prev)/λ       < e^(-λ)
 where each check reuses the previous ratio value.
 
 This way, we can compute the Taylor expansion once, and do cheap rational arithmetic recursively
-until the comparison does not hold any more. Also note that in the above, the real check should be
-
-wins 1 seat  :          p       < λ * e^(-λ)         where λ = n2 * σ
-wins 2 seats :          p       < (λ^2 * e^(-λ)) / 2
-wins 3 seats :       3b/λ = c   < (λ^3 * e^(-λ)) / (2*3)
-...
-wins k seats : k*(prev)/λ       < (λ^k * e^(-λ)) / (k)
+until the comparison does not hold any more.
 
 -}
+
+checkLeaderValueLeios ::
+  OutputVRF ->
+  Rational -> -- stake ratio σ
+  Integer -> -- n2
+  Int -- The number of seats this node wins
+checkLeaderValueLeios outputVRF σ n2 =
+  checkLeaderNatValueLeios
+    (assertBoundedNatural outputNatMax (getOutputVRFNatural outputVRF))
+    σ
+    (n2 % 1)
+
+checkLeaderNatValueLeios ::
+  BoundedNatural -> -- p
+  Rational -> -- stake ratio σ
+  Rational -> -- n2
+  Int
+checkLeaderNatValueLeios bn σ n2
+  | n2 <= 0 = 0
+  | σ <= 0 = 0
+  | otherwise = fromMaybe 0 (taylorExpCmpFirstNonLower 1 orders (-λ))
+  where
+    λ, p, a :: FixedPoint
+    λ = fromRational (n2 * σ)
+    certNatMax = bvMaxValue bn
+    certNat = bvValue bn
+    -- Normalize VRF output to [0, 1]: p = certNat / certNatMax
+    p = fromRational (toInteger certNat % toInteger certNatMax)
+    a = p / λ
+    orders = a : zipWith (\k prev -> (fromIntegral @Integer @FixedPoint k * prev) / λ) [2 ..] orders

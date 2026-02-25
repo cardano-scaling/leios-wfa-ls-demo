@@ -55,6 +55,22 @@ executable exec
     ouroboros-consensus-cardano,
     transformers,
 
+executable vrf-example
+  import: lang
+  main-is: VRFExample.hs
+  hs-source-dirs: app
+  build-depends:
+    base >=4.9 && <5,
+    bytestring,
+    cardano-api ^>=10.16,
+    cardano-crypto-class,
+    cardano-ledger-core,
+    containers,
+    leios-wfa-ls-demo,
+    optparse-applicative,
+    ouroboros-consensus-cardano,
+    transformers,
+
 test-suite tests
   import: lang
   type: exitcode-stdio-1.0

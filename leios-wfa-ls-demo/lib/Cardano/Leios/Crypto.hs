@@ -19,6 +19,8 @@ module Cardano.Leios.Crypto (
   PublicKeyLeios (..),
   PrivateKeyLeios (..),
   checkVRFThreshold,
+  getOutputVRFNatural,
+  outputNatMax,
   verifyPossessionProofLeios,
   createPossessionProofLeios,
   coercePrivateKeyLeios,
@@ -32,10 +34,11 @@ import Cardano.Crypto.DSIGN
 
 import Cardano.Api (NetworkId (..))
 import Cardano.Api.Ledger (KeyHash (..))
-import Cardano.Crypto.Hash (hashToBytes)
-import Cardano.Crypto.Util (SignableRepresentation)
+import Cardano.Crypto.Hash (hashToBytes, hashWith, sizeHash)
+import Cardano.Crypto.Util (SignableRepresentation, bytesToNatural)
+import Cardano.Ledger.Hashes (HASH, Hash)
 import Cardano.Leios.Types
-import Data.ByteString
+import Data.ByteString (ByteString)
 import Data.Coerce (coerce)
 import Data.Data (Proxy (..))
 import Data.Ratio ((%))
@@ -73,6 +76,15 @@ type Vote = SignatureLeios 'Vote
 -- | The VRF output that is used by a voting party to derive a
 -- verifiably random value uniformly distributed between 0 and `2^384`.
 type OutputVRF = SignatureLeios 'VRF
+
+-- | Convert a VRF output to a Natural number by hashing the BLS signature
+getOutputVRFNatural :: OutputVRF -> Natural
+getOutputVRFNatural (SignatureLeios blsSig) =
+  bytesToNatural . hashToBytes $
+    (hashWith rawSerialiseSigDSIGN blsSig :: Hash HASH (SigDSIGN BLS12381MinSigDSIGN))
+
+outputNatMax :: Natural
+outputNatMax = (2 :: Natural) ^ ((8 :: Integer) * fromIntegral @Word @Integer (sizeHash (Proxy :: Proxy HASH)))
 
 -- | The proof of possession of any `PublicVoteKeyLeios r`
 type PublicKeyPossessionProofLeios = PossessionProofDSIGN BLS12381MinSigDSIGN

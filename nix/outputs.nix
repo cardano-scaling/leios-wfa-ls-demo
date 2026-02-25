@@ -15,6 +15,7 @@ let
     leios-wfa-ls-demo-test = project.flake'.packages."leios-wfa-ls-demo:test:test";
     leios-wfa-ls-demo-bench = project.flake'.packages."leios-wfa-ls-demo:bench:bench";
     leios-wfa-ls-demo-exe = project.flake'.packages."leios-wfa-ls-demo:exe:exec";
+    leios-wfa-ls-demo-vrf-example = project.flake'.packages."leios-wfa-ls-demo:exe:vrf-example";
   };
 
   devShells = rec {

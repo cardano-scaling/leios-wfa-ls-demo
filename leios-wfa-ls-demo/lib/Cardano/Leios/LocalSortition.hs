@@ -143,7 +143,7 @@ checkLeaderNatValueLeios ::
 checkLeaderNatValueLeios bn σ n2
   | n2 <= 0 = 0
   | σ <= 0 = 0
-  | otherwise = fromMaybe 0 (taylorExpCmpFirstNonLower 1 orders (-λ))
+  | otherwise = fromMaybe 0 (taylorExpCmpFirstNonLower 3 orders (-λ))
   where
     λ, p, a :: FixedPoint
     λ = fromRational (n2 * σ)

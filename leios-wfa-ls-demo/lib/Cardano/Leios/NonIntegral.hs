@@ -8,6 +8,7 @@ module Cardano.Leios.NonIntegral (
   CompareResult (..),
   taylorExpCmp,
   taylorExpCmpFirstNonLower,
+  binomialSeries,
 ) where
 
 data CompareResult a
@@ -213,6 +214,30 @@ taylorExpCmp boundX cmp x = go 1000 0 x 1 1
         nextX = err
         err' = (err * x) / divisor'
         acc' = acc + nextX
+
+-- | Efficient way to compare the result of the binomial series (1+x)^n
+-- to a threshold value. Using error estimation one can stop early, once
+-- it's known the result will certainly be above or below the target value.
+--
+-- The binomial series is: (1+x)^n = sum_{k=0}^{infinity} (n choose k) * x^k
+-- where (n choose k) = n*(n-1)*...*(n-k+1)/k! for real n.
+--
+-- IMPORTANT: boundX should be chosen appropriately for error bound estimation.
+-- For |x| < 1, the error is bounded by the absolute value of the next term.
+binomialSeries :: RealFrac a => a -> a -> a -> a -> CompareResult a
+binomialSeries boundX cmp x n = go 1000 0 (n * x) 1 1
+  where
+    go maxN k err acc divisor
+      | maxN == k = MaxReached k
+      | cmp >= acc' + errorTerm = ABOVE acc' (k + 1)
+      | cmp < acc' - errorTerm = BELOW acc' (k + 1)
+      | otherwise = go maxN (k + 1) err' acc' divisor'
+      where
+        errorTerm = abs (err' * boundX)
+        divisor' = divisor + 1
+        nextTerm = err
+        err' = (err * x * (n - divisor)) / divisor'
+        acc' = acc + nextTerm
 
 -- Returns the index of the first element that is NOT certainly BELOW.
 -- It evaluates cmps left-to-right, reusing the Taylor-expansion state

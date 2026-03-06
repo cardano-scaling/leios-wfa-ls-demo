@@ -2,6 +2,7 @@ module Main (main) where
 
 import Test.Tasty (defaultMain, testGroup)
 
+import qualified Test.Cardano.Leios.LocalSortition as LocalSortition
 import qualified Test.Cardano.Leios.NonIntegral as NonIntegral
 import qualified Test.Cardano.Leios.WeightedFaitAccompli as WeightedFaitAccompli
 
@@ -12,4 +13,5 @@ main =
       "Tests"
       [ WeightedFaitAccompli.tests
       , NonIntegral.tests
+      , LocalSortition.tests
       ]

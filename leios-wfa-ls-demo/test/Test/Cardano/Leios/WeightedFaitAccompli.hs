@@ -1,7 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Test.Cardano.Leios.WeightedFaitAccompli (tests) where
+module Test.Cardano.Leios.WeightedFaitAccompli (tests, genOrderedSetOfParties) where
 
 import Cardano.Api (NetworkId (..), NetworkMagic (..))
 import Cardano.Api.Shelley (makePraosNonce)

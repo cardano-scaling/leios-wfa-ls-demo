@@ -61,6 +61,7 @@ test-suite tests
   main-is: Main.hs
   hs-source-dirs: test
   other-modules:
+    Test.Cardano.Leios.LocalSortition
     Test.Cardano.Leios.NonIntegral
     Test.Cardano.Leios.WeightedFaitAccompli
 

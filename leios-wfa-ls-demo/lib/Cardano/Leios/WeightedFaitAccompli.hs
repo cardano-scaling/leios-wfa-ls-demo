@@ -141,7 +141,8 @@ findPersistentSeatByPublicKey pk =
 
 data NonPersistentVoter = NonPersistentVoter
   { publicVoteKeyNonPersistent :: PublicKeyLeios 'Vote
-  , stakeNonPersistentVoter :: RelativeStake
+  , -- This is stake w.r.t the total of non-persistent stake
+    stakeNonPersistentVoter :: RelativeStake
   }
   deriving (Show)
 
@@ -206,7 +207,8 @@ wFA nonce osp@(OrderedSetOfParties prts n) =
               [ ( poolId p
                 , NonPersistentVoter
                     { publicVoteKeyNonPersistent = publicVoteKey p
-                    , stakeNonPersistentVoter = stake p
+                    , -- Normalize each stake by the remaining stake of the non-persistent voters
+                      stakeNonPersistentVoter = if remStake == 0 then stake p else stake p / remStake
                     }
                 )
               | p <- nonPersistent

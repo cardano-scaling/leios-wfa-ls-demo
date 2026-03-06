@@ -1,6 +1,11 @@
 module Test.Cardano.Leios.NonIntegral (tests) where
 
-import Cardano.Leios.NonIntegral (CompareResult (..), taylorExpCmp, taylorExpCmpFirstNonLower)
+import Cardano.Leios.NonIntegral (
+  CompareResult (..),
+  FirstNonLowerError (..),
+  taylorExpCmp,
+  taylorExpCmpFirstNonLower,
+ )
 import Data.List (findIndex)
 import Data.Ratio ((%))
 import Test.Tasty (TestTree, localOption, testGroup)
@@ -41,7 +46,14 @@ prop_taylorExpCmpFirstNonLowerMatches =
         individualResults = [taylorExpCmp boundX cmp x | cmp <- cmps]
         -- Find the first result that is not BELOW
         resultIndividual = findIndex (not . isBELOW) individualResults
-     in resultList == resultIndividual
+        -- Convert Either FirstNonLowerError Int to Maybe Int for comparison:
+        -- Right i where i >= length cmps means all BELOW (no non-BELOW found) → Nothing
+        -- Right i where i < length cmps means first non-BELOW at index i → Just i
+        -- Left err means max iterations reached - extract seat index from structured error
+        resultListAsMaybe = case resultList of
+          Right i -> if i >= length cmps then Nothing else Just i
+          Left err -> Just (atSeat err)
+     in resultListAsMaybe == resultIndividual
 
 -- | Check if a CompareResult is BELOW
 isBELOW :: CompareResult a -> Bool

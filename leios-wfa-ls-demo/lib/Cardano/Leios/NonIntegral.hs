@@ -8,12 +8,19 @@ module Cardano.Leios.NonIntegral (
   CompareResult (..),
   taylorExpCmp,
   taylorExpCmpFirstNonLower,
+  FirstNonLowerError (..),
 ) where
 
 data CompareResult a
   = BELOW a Int
   | ABOVE a Int
   | MaxReached Int
+  deriving (Show, Eq)
+
+data FirstNonLowerError = MaxIterationsReached
+  { atSeat :: Int
+  , iterations :: Int
+  }
   deriving (Show, Eq)
 
 scaleExp :: RealFrac a => a -> (Integer, a)
@@ -219,9 +226,13 @@ taylorExpCmp boundX cmp x = go 1000 0 x 1 1
 -- (acc/err/divisor/n) across elements so we don't redo work.
 --
 -- Behavior:
---   * If cmp_i is proven ABOVE -> return i
---   * If max iterations reached while testing cmp_i -> return i
---   * If every element is proven BELOW -> returns Nothing
+--   * If cmp_i is proven ABOVE -> Right i [you won i seats: seats 0..i-1]
+--   * If max iterations reached while testing cmp_i -> Left FirstNonLowerError
+--   * If every element is proven BELOW -> Right (length cmps) [all tested seats won]
+--
+-- NOTE: With an infinite list (typical use case), the function always terminates
+-- with either Right i (found ABOVE at index i) or Left error (max iterations reached).
+-- The "all BELOW" case only occurs with finite lists (e.g., in tests).
 --
 -- IMPORTANT: boundX must be e^{|x|} for correct error bounds (see taylorExpCmp).
 taylorExpCmpFirstNonLower ::
@@ -232,25 +243,28 @@ taylorExpCmpFirstNonLower ::
   [a] ->
   -- | x in e^x
   a ->
-  Maybe Int
+  Either FirstNonLowerError Int
 taylorExpCmpFirstNonLower boundX cmps x =
   goList 1000 0 x 1 1 0 cmps
   where
     -- State is: maxN, n, err, acc, divisor
     -- plus current index i and remaining cmps.
-    goList _ _ _ _ _ _ [] = Nothing
+    -- Returns i when all BELOW (i = length of list processed)
+    goList _ _ _ _ _ i [] = Right i
     goList maxN n err acc divisor i (cmp : rest) =
       case decideOne maxN n err acc divisor cmp of
-        Stop -> Just i
+        MaxReachedStep n' -> Left $ MaxIterationsReached {atSeat = i, iterations = n'}
+        StopAbove -> Right i
         Below n' err' acc' divisor' ->
           goList maxN n' err' acc' divisor' (i + 1) rest
 
     -- Decide current cmp by advancing the shared Taylor state as needed.
     -- If BELOW is established, returns the *advanced* state to continue with.
-    -- If ABOVE is established or maxN reached, returns Stop.
+    -- If ABOVE is established, returns StopAbove.
+    -- If maxN reached, returns MaxReachedStep.
     decideOne maxN n err acc divisor cmp
-      | maxN == n = Stop
-      | cmp >= acc' + errorTerm = Stop
+      | maxN == n = MaxReachedStep n
+      | cmp >= acc' + errorTerm = StopAbove
       | cmp < acc' - errorTerm = Below (n + 1) err' acc' divisor'
       | otherwise = decideOne maxN (n + 1) err' acc' divisor' cmp
       where
@@ -261,6 +275,7 @@ taylorExpCmpFirstNonLower boundX cmps x =
         errorTerm = abs (err' * boundX)
 
 data Step a
-  = Stop
+  = StopAbove
+  | MaxReachedStep Int
   | -- Here we have `Below n err acc divisor`
     Below Int a a a

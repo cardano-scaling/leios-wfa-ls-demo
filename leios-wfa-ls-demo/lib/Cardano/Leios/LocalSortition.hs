@@ -1,8 +1,13 @@
+{-# LANGUAGE TypeApplications #-}
+
 module Cardano.Leios.LocalSortition where
 
--- import Cardano.Crypto.VRF (OutputVRF)
--- import Cardano.Leios.Types (RelativeStake)
--- import Cardano.Protocol.TPraos.BHeader (BoundedNatural)
+import Cardano.Ledger.BaseTypes (FixedPoint)
+import Cardano.Leios.Crypto
+import Cardano.Leios.NonIntegral (FirstNonLowerError, taylorExpCmpFirstNonLower)
+import Cardano.Protocol.TPraos.BHeader (BoundedNatural (..), assertBoundedNatural)
+import GHC.Real ((%))
+import Numeric.Natural ()
 
 {-
 Some notes on local sortition using a random variable `X ~ Poisson(\lambda)`
@@ -55,50 +60,107 @@ on average that n2 non-persistent voters win the right to endorse an EB via a Po
 
 Now since we have that for X_i ~ Poisson(λ_i) that E[X_i] = λ_i and that \Sum_i X_i ~ Poisson(\Sum λ_i).
 
-Combine this with the fact that we desire that more stake wins you proportionally more seats, we have
-that by the desire that
+Combine this with the fact that we desire that more stake wins you proportionally more seats, we should
+aim for
 
-E[X_totalSeats] = E[\Sum_i λ_i] = n2
+E[X_totalSeats] = λ_total = E[\Sum_i X_i] = \Sum_i λ_i = n2
 
-giving that we require λ_i = σ_i * n2 (where σ_i is the stake of each party).
-We conclude that for a single pool that holds σ stake that λ = σ * n2
+which is a similar constraint to the above x = 1 - (1 - f)^(1/totalActiveStake), it tells
+us how to set λ_i.
 
-Then similarly to the VRF argument for Praos we check that a pool wins k seats if
+Note that if we define λ_i = σ_i * n2 (where σ_i is the stake of each party), we get that
 
-p < (n2 * σ)^k * e^(-n2*σ) / (k!) <=> (p * k!) / (n2 * σ)^k < e^(-n2*σ)
+λ_total = Sum_i λ_i = Sum_i (σ_i * n2) = n2 * \Sum_i σ_i = n2
 
-the latter exponential can be compared in a similar fashion. Moreover, given that
+So, in our calculation we define for a single pool that holds σ stake that its rate is λ = σ * n2
 
-P(X=(k+1)) = ( e^(-λ) * λ^(k+1) ) / (k+1)!
-           = ( e^(-λ) * λ^k * λ ) / (k! * (k+1))
-           = P(X = k) * (λ / (k+1))
+To sample the number of seats from Poisson(λ), we use the inverse CDF method with VRF output p ∈ [0,1]:
+We find k such that CDF(k-1) < p ≤ CDF(k), where
 
-So if we initially calculate P(X=1) and compare
+CDF(k) = P(X ≤ k) = ∑_{i=0}^{k} P(X=i) = e^(-λ) * ∑_{i=0}^{k} λ^i/i!
 
-p < (n2 * σ) * e^(-n2*σ) <=> p / (n2 * σ) < e^(-n2*σ)
+We can compute this iteratively. Define S[k] = ∑_{i=0}^{k} λ^i/i!, then:
 
-Then if that is true (they win at least 1 seat), the next order comparison P(X=2)
-can cheaply be checked via
+S[0] = 1
+S[k] = S[k-1] + λ^k/k!
 
-p < (λ / 2) P(X=1) <=> 2p / λ < P(X=1) = (n2 * σ) * e^(-n2*σ) <=> 2p / (λ * n2 * σ) < e^(-n2*σ)
+where the term λ^k/k! can be computed from the previous term via:
 
-or, given that you define a = p / (n2 * σ) = p / λ, the iterative checks are:
+term[0] = 1
+term[k] = term[k-1] * λ/k
 
-wins 1 seat  :          a       < e^(-λ)         where λ = n2 * σ
-wins 2 seats :       2a/λ = b   < e^(-λ)
-wins 3 seats :       3b/λ = c   < e^(-λ)
+Then CDF(k) = e^(-λ) * S[k], and we check if p ≤ CDF(k), which is equivalent to:
+
+p ≤ e^(-λ) * S[k]  ⟺  p * e^λ ≤ S[k]  ⟺  S[k] / p ≥ e^λ
+
+So the iterative algorithm is:
+
+k=0: S = 1,            check if 1/p           ≥ e^λ, if yes return 0
+k=1: S = 1 + λ,        check if (1+λ)/p       ≥ e^λ, if yes return 1
+k=2: S = 1 + λ + λ²/2, check if (1+λ+λ²/2)/p  ≥ e^λ, if yes return 2
 ...
-wins k seats : k*(prev)/λ       < e^(-λ)
 
-where each check reuses the previous ratio value.
+where each S[k] is updated via S[k] = S[k-1] + term[k] with term[k] = term[k-1] * λ/k.
 
-This way, we can compute the Taylor expansion once, and do cheap rational arithmetic recursively
-until the comparison does not hold any more. Also note that in the above, the real check should be
+We iterate until we find the first k where p ≤ CDF(k), equivalently S[k]/p ≥ e^λ. Because S[k]/p
+is increasing in k and we check in order, we find the smallest such k. This automatically ensures
+CDF(k-1) < p ≤ CDF(k), correctly sampling from Poisson(λ).
 
-wins 1 seat  :          p       < λ * e^(-λ)         where λ = n2 * σ
-wins 2 seats :          p       < (λ^2 * e^(-λ)) / 2
-wins 3 seats :       3b/λ = c   < (λ^3 * e^(-λ)) / (2*3)
-...
-wins k seats : k*(prev)/λ       < (λ^k * e^(-λ)) / (k)
+Implementation detail:
+We use taylorExpCmpFirstNonLower, which returns the first index i where orders[i] ≥ e^x.
+In our case:
+  - orders = [S[0]/p, S[1]/p, S[2]/p, ...] (increasing sequence)
+  - x = λ
+  - Returns: first k where S[k]/p ≥ e^λ
+
+This gives us the correct inverse CDF:
+  S[k]/p ≥ e^λ
+  ⟺ S[k] ≥ p × e^λ
+  ⟺ S[k] × e^(-λ) ≥ p
+  ⟺ CDF(k) ≥ p
+
+So we find min{k : CDF(k) ≥ p}, which is exactly the inverse CDF method for sampling from Poisson(λ).
+The comparison is done efficiently using a Taylor expansion for e^λ.
 
 -}
+
+checkLeaderValueLeios ::
+  OutputVRF ->
+  Rational -> -- stake ratio σ
+  Integer -> -- n2
+  Either FirstNonLowerError Int -- The number of seats this node wins, or an error
+checkLeaderValueLeios outputVRF σ n2 =
+  checkLeaderNatValueLeios
+    (assertBoundedNatural outputNatMax (getOutputVRFNatural outputVRF))
+    σ
+    (n2 % 1)
+
+checkLeaderNatValueLeios ::
+  BoundedNatural -> -- p
+  Rational -> -- stake ratio σ
+  Rational -> -- n2
+  Either FirstNonLowerError Int
+checkLeaderNatValueLeios bn σ n2
+  | n2 <= 0 = Right 0
+  | σ <= 0 = Right 0
+  | otherwise = taylorExpCmpFirstNonLower 3 orders λ
+  where
+    λ, p :: FixedPoint
+    λ = fromRational (n2 * σ)
+    certNatMax = bvMaxValue bn
+    certNat = bvValue bn
+    -- Normalize VRF output to [0, 1]: p = certNat / certNatMax
+    p = fromRational (toInteger certNat % toInteger certNatMax)
+
+    -- Compute terms: [1, λ, λ²/2, λ³/6, ...] = [λ^k/k! for k=0,1,2,...]
+    terms :: [FixedPoint]
+    terms = 1 : zipWith (\k prev -> prev * λ / fromIntegral @Integer @FixedPoint k) [1 ..] terms
+
+    -- Compute cumulative sums S[k] = ∑_{i=0}^{k} λ^i/i!
+    -- cumSums = [1, 1+λ, 1+λ+λ²/2, ...]
+    cumSums :: [FixedPoint]
+    cumSums = scanl1 (+) terms
+
+    -- For each k, compute S[k]/p to check if S[k]/p >= e^λ (equivalently: CDF(k) >= p)
+    orders :: [FixedPoint]
+    orders = map (/ p) cumSums

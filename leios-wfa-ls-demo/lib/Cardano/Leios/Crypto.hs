@@ -18,7 +18,6 @@ module Cardano.Leios.Crypto (
   KeyRoleLeios (..),
   PublicKeyLeios (..),
   PrivateKeyLeios (..),
-  checkVRFThreshold,
   verifyPossessionProofLeios,
   createPossessionProofLeios,
   coercePrivateKeyLeios,
@@ -41,7 +40,6 @@ import Cardano.Leios.Types
 import Data.ByteString
 import Data.Coerce (coerce)
 import Data.Data (Proxy (..))
-import Data.Ratio ((%))
 import Numeric.Natural (Natural)
 
 -- In Linear Leios we use BLS signature key material in three different ways.
@@ -154,13 +152,3 @@ verifyPossessionProofLeios (PublicKeyLeios (nId, vk)) pId = verifyPossessionProo
   where
     ctx = blsCtx (Proxy @'PoP) nId
     ctx' = ctx {blsSignContextAug = blsSignContextAug ctx <> Just ((hashToBytes . unKeyHash) pId)}
-
--- | Placeholder VRF check
-checkVRFThreshold :: RelativeStake -> OutputVRF -> Either String Weight
-checkVRFThreshold stake _output
-  | stake > 1 % 3 = Left msg
-  | otherwise = Right (1 % fromIntegral @Natural @Integer vrfMaxValue)
-  where
-    msg = "Stake too large"
-    vrfMaxValue :: Natural
-    vrfMaxValue = (2 :: Natural) ^ (8 * sizeSigDSIGN (Proxy @BLS12381MinSigDSIGN))

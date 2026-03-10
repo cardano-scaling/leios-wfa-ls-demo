@@ -166,6 +166,8 @@ data CommitteeSelection = CommitteeSelection
   { persistentSeats :: PersistentSeats
   , nonPersistentVoters :: NonPersistentLocalSortition
   , praosNonce :: PraosNonce
+  , targetCommitteeSize :: CommitteeSize
+  , nonPersistentSeats :: NonPersistentSeats
   }
   deriving (Show)
 
@@ -175,6 +177,8 @@ wFA nonce osp@(OrderedSetOfParties prts n) =
     { persistentSeats = persSeats
     , nonPersistentVoters = nonPersVoters
     , praosNonce = nonce
+    , targetCommitteeSize = n
+    , nonPersistentSeats = n2
     }
   where
     iStar = findIStarAcc osp
@@ -185,7 +189,8 @@ wFA nonce osp@(OrderedSetOfParties prts n) =
     -- We assign persistent seats to parties at indices [0..iStar-1] (iStar parties total).
     (persistent, nonPersistent) = splitAt iStar prts
     n2 =
-      fromIntegral @CommitteeSize @RelativeStake n - fromIntegral @Int @RelativeStake (length persistent)
+      fromIntegral @CommitteeSize @NonPersistentSeats n
+        - fromIntegral @Int @NonPersistentSeats (length persistent)
 
     persSeats :: PersistentSeats
     persSeats =
@@ -213,7 +218,8 @@ wFA nonce osp@(OrderedSetOfParties prts n) =
                 )
               | p <- nonPersistent
               ]
-        , weightPerNonPersistentSeat = if n2 /= 0 then remStake / n2 else 0
+        , weightPerNonPersistentSeat =
+            if n2 /= 0 then remStake / fromIntegral @NonPersistentSeats @RelativeStake n2 else 0
         }
 
     remStake :: RelativeStake

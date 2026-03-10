@@ -53,13 +53,13 @@ main = do
     Right m -> do
       -- Note that on preview we have ~611 pools
       -- on mainnet this is ~3000
-      let targetCommitteeSize = 575 :: CommitteeSize
+      let targetSize = 575 :: CommitteeSize
           nId =
             if networkMagic == 764824073
               then Mainnet
               else Testnet (NetworkMagic (fromIntegral @Int @Word32 networkMagic)) :: NetworkId
           unOrderedParties = createParties nId $ Map.toList m
-      case mkOrderedSetOfParties targetCommitteeSize unOrderedParties of
+      case mkOrderedSetOfParties targetSize unOrderedParties of
         Left err ->
           hPutStrLn stderr $ "'mkOrderedSetOfParties' error: " <> show err
         Right pools -> do
@@ -74,9 +74,9 @@ main = do
               stakePerNonPersistentSeat :: Double
               stakePerNonPersistentSeat = (fromRational . weightPerNonPersistentSeat . nonPersistentVoters) committee
 
-          writeStakeCSV "stake.csv" numPersistent (fromIntegral @CommitteeSize @Int targetCommitteeSize) pools
+          writeStakeCSV "stake.csv" numPersistent (fromIntegral @CommitteeSize @Int targetSize) pools
           writeStakeCBOR "stake.cbor" 10000000 pools
-          putStrLn $ "Target committee size  " <> show targetCommitteeSize
+          putStrLn $ "Target committee size  " <> show targetSize
           putStrLn $
             "Persistent voters:     "
               <> show numPersistent

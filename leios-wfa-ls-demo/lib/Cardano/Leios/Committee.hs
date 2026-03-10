@@ -3,6 +3,7 @@
 
 module Cardano.Leios.Committee (
   CommitteeSize,
+  NonPersistentSeats,
   Party (..),
   PoolId,
   OrderedSetOfParties (..),
@@ -20,6 +21,10 @@ import Data.Word (Word16)
 -- have a committee of this size, since the non-persistent seats
 -- are stochastically assigned based on a VRF.
 type CommitteeSize = Word16
+
+-- | A type wrapper around `Word16` representing the number of non-persistent
+-- seats in the committee.
+type NonPersistentSeats = Word16
 
 -- | A type representing a party in the Leios protocol.
 -- This type assumes that the public key is valid,

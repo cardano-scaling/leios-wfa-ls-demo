@@ -189,8 +189,8 @@ runSimulation nId osp numRounds = do
       let seatDistribution = calculateSeatDistribution poolResults
           seatMap = Map.fromList seatDistribution
           distribution0to10 = [(k, Map.findWithDefault 0 k seatMap) | k <- [0 .. 10]]
-          totalFromDist = sum [seats * count | (seats, count) <- distribution0to10]
-          expectedCumulative = numRounds * fromIntegral n2
+          totalFromDist = sum [seats * fromIntegral count | (seats, count) <- distribution0to10]
+          expectedCumulative = fromIntegral numRounds * n2
 
       putStrLn "=== SEAT DISTRIBUTION ==="
       mapM_ printSeatDistribution distribution0to10

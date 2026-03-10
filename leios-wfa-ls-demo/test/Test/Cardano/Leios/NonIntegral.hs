@@ -46,13 +46,13 @@ prop_taylorExpCmpFirstNonLowerMatches =
         individualResults = [taylorExpCmp boundX cmp x | cmp <- cmps]
         -- Find the first result that is not BELOW
         resultIndividual = findIndex (not . isBELOW) individualResults
-        -- Convert Either FirstNonLowerError Int to Maybe Int for comparison:
+        -- Convert Either FirstNonLowerError Integer to Maybe Int for comparison:
         -- Right i where i >= length cmps means all BELOW (no non-BELOW found) → Nothing
         -- Right i where i < length cmps means first non-BELOW at index i → Just i
         -- Left err means max iterations reached - extract seat index from structured error
         resultListAsMaybe = case resultList of
-          Right i -> if i >= length cmps then Nothing else Just i
-          Left err -> Just (atSeat err)
+          Right i -> if i >= fromIntegral (length cmps) then Nothing else Just (fromIntegral i)
+          Left err -> Just (fromIntegral (atSeat err))
      in resultListAsMaybe == resultIndividual
 
 -- | Check if a CompareResult is BELOW

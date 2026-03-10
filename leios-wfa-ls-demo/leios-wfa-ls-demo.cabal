@@ -79,6 +79,7 @@ test-suite tests
   other-modules:
     Test.Cardano.Leios.LocalSortition
     Test.Cardano.Leios.NonIntegral
+    Test.Cardano.Leios.Vote
     Test.Cardano.Leios.WeightedFaitAccompli
 
   build-depends:

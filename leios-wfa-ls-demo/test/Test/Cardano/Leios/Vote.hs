@@ -5,6 +5,7 @@ module Test.Cardano.Leios.Vote (tests) where
 
 import Cardano.Api (NetworkId (..), NetworkMagic (..), PraosNonce)
 import Cardano.Api.Shelley (makePraosNonce)
+import Cardano.Binary (decodeFull, serialize')
 import qualified Cardano.Crypto.Hash as Hash
 import Cardano.Leios.Committee (
   OrderedSetOfParties (..),
@@ -22,6 +23,8 @@ import Cardano.Leios.Types (
 import Cardano.Leios.Utils (toSkForBLS)
 import Cardano.Leios.Vote (
   LeiosVote (..),
+  NonPersistentVote (..),
+  PersistentVote (..),
   createNonPersistentVote,
   createPersistentVote,
   verifyLeiosVote,
@@ -35,7 +38,8 @@ import Cardano.Leios.WeightedFaitAccompli (
   weightPersistentSeat,
  )
 import qualified Data.ByteString.Char8 as BSC
-import Data.Either (lefts)
+import qualified Data.ByteString.Lazy as BSL
+import Data.Either (lefts, rights)
 import qualified Data.Map as Map
 import Test.Cardano.Leios.WeightedFaitAccompli (genOrderedSetOfParties)
 import Test.Tasty (TestTree, localOption, testGroup)
@@ -59,6 +63,18 @@ tests =
         testProperty
           "non-persistent vote roundtrip"
           prop_nonPersistentVoteRoundtrip
+    , localOption (QuickCheckTests 1000) $
+        testProperty
+          "persistent vote CBOR roundtrip"
+          prop_persistentVoteCBORRoundtrip
+    , localOption (QuickCheckTests 1000) $
+        testProperty
+          "non-persistent vote CBOR roundtrip"
+          prop_nonPersistentVoteCBORRoundtrip
+    , localOption (QuickCheckTests 1000) $
+        testProperty
+          "leios vote CBOR roundtrip"
+          prop_leiosVoteCBORRoundtrip
     ]
 
 -- | Property test verifying that persistent votes can be created and verified
@@ -190,3 +206,140 @@ testElectionId = 42
 -- | Test endorser block hash
 testEndorserBlockHash :: EndorserBlockHash
 testEndorserBlockHash = Hash.castHash $ Hash.hashWith id $ BSC.pack "test-endorser-block"
+
+-- | Property test verifying CBOR serialization roundtrip for persistent votes
+-- This test:
+-- 1. Generates a random committee
+-- 2. Creates persistent votes for all parties with persistent seats
+-- 3. Serializes each vote to CBOR and deserializes it back
+-- 4. Verifies the deserialized vote equals the original
+prop_persistentVoteCBORRoundtrip :: Property
+prop_persistentVoteCBORRoundtrip =
+  forAllBlind genOrderedSetOfParties $ \osp ->
+    let nonce = makePraosNonce $ BSC.pack "test-nonce"
+        committee = wFA nonce osp
+        eId = testElectionId
+        ebHash = testEndorserBlockHash
+        -- Create all possible persistent votes
+        persistentVotes =
+          rights
+            [createPersistentVote committee (makePrivateKey (poolId party)) eId ebHash | party <- parties osp]
+        -- Test CBOR roundtrip for each vote
+        roundtripResults = map testPersistentVoteCBORRoundtrip persistentVotes
+        failures = lefts roundtripResults
+     in counterexample
+          ( "Number of persistent votes: "
+              ++ show (length persistentVotes)
+              ++ "\nRoundtrip failures: "
+              ++ show (length failures)
+              ++ "\nFailure details: "
+              ++ show failures
+          )
+          $ null failures
+
+-- | Test CBOR roundtrip for a single persistent vote
+testPersistentVoteCBORRoundtrip :: PersistentVote -> Either String ()
+testPersistentVoteCBORRoundtrip pv = do
+  let encoded = BSL.fromStrict $ serialize' pv
+  case decodeFull encoded of
+    Left err -> Left $ "Failed to decode persistent vote: " ++ show err
+    Right pv' ->
+      if pv == pv'
+        then Right ()
+        else Left "Decoded persistent vote does not match original"
+
+-- | Property test verifying CBOR serialization roundtrip for non-persistent votes
+-- This test:
+-- 1. Generates a random committee
+-- 2. Creates non-persistent votes (only those that pass VRF threshold)
+-- 3. Serializes each vote to CBOR and deserializes it back
+-- 4. Verifies the deserialized vote equals the original
+prop_nonPersistentVoteCBORRoundtrip :: Property
+prop_nonPersistentVoteCBORRoundtrip =
+  forAllBlind genOrderedSetOfParties $ \osp ->
+    let nonce = makePraosNonce $ BSC.pack "test-nonce"
+        committee = wFA nonce osp
+        eId = testElectionId
+        ebHash = testEndorserBlockHash
+        nonPersistentVotersData = voters $ nonPersistentVoters committee
+        -- Create all possible non-persistent votes (only successful ones that pass VRF)
+        nonPersistentVotes =
+          rights
+            [ createNonPersistentVote nonce committee (makePrivateKey pId) eId ebHash
+            | pId <- Map.keys nonPersistentVotersData
+            ]
+        -- Test CBOR roundtrip for each vote
+        roundtripResults = map testNonPersistentVoteCBORRoundtrip nonPersistentVotes
+        failures = lefts roundtripResults
+     in counterexample
+          ( "Number of non-persistent votes: "
+              ++ show (length nonPersistentVotes)
+              ++ "\nRoundtrip failures: "
+              ++ show (length failures)
+              ++ "\nFailure details: "
+              ++ show failures
+          )
+          $ null failures
+
+-- | Test CBOR roundtrip for a single non-persistent vote
+testNonPersistentVoteCBORRoundtrip :: NonPersistentVote -> Either String ()
+testNonPersistentVoteCBORRoundtrip npv = do
+  let encoded = BSL.fromStrict $ serialize' npv
+  case decodeFull encoded of
+    Left err -> Left $ "Failed to decode non-persistent vote: " ++ show err
+    Right npv' ->
+      if npv == npv'
+        then Right ()
+        else Left "Decoded non-persistent vote does not match original"
+
+-- | Property test verifying CBOR serialization roundtrip for LeiosVote
+-- This test combines both persistent and non-persistent votes
+prop_leiosVoteCBORRoundtrip :: Property
+prop_leiosVoteCBORRoundtrip =
+  forAllBlind genOrderedSetOfParties $ \osp ->
+    let nonce = makePraosNonce $ BSC.pack "test-nonce"
+        committee = wFA nonce osp
+        eId = testElectionId
+        ebHash = testEndorserBlockHash
+        -- Create all possible persistent votes
+        persistentVotes =
+          map LeiosPersistentVote $
+            rights
+              [createPersistentVote committee (makePrivateKey (poolId party)) eId ebHash | party <- parties osp]
+        -- Create all possible non-persistent votes
+        nonPersistentVotersData = voters $ nonPersistentVoters committee
+        nonPersistentVotes =
+          map LeiosNonPersistentVote $
+            rights
+              [ createNonPersistentVote nonce committee (makePrivateKey pId) eId ebHash
+              | pId <- Map.keys nonPersistentVotersData
+              ]
+        -- Combine all votes
+        allVotes = persistentVotes ++ nonPersistentVotes
+        -- Test CBOR roundtrip for each vote
+        roundtripResults = map testLeiosVoteCBORRoundtrip allVotes
+        failures = lefts roundtripResults
+     in counterexample
+          ( "Number of persistent votes: "
+              ++ show (length persistentVotes)
+              ++ "\nNumber of non-persistent votes: "
+              ++ show (length nonPersistentVotes)
+              ++ "\nTotal votes: "
+              ++ show (length allVotes)
+              ++ "\nRoundtrip failures: "
+              ++ show (length failures)
+              ++ "\nFailure details: "
+              ++ show failures
+          )
+          $ null failures
+
+-- | Test CBOR roundtrip for a single LeiosVote
+testLeiosVoteCBORRoundtrip :: LeiosVote -> Either String ()
+testLeiosVoteCBORRoundtrip lv = do
+  let encoded = BSL.fromStrict $ serialize' lv
+  case decodeFull encoded of
+    Left err -> Left $ "Failed to decode leios vote: " ++ show err
+    Right lv' ->
+      if lv == lv'
+        then Right ()
+        else Left "Decoded leios vote does not match original"

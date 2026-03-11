@@ -1,12 +1,12 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 
 module Cardano.Leios.Crypto (
   Vote,
@@ -33,13 +33,17 @@ import Cardano.Crypto.DSIGN
 
 import Cardano.Api (NetworkId (..))
 import Cardano.Api.Ledger (KeyHash (..))
+import Cardano.Binary (FromCBOR (..), ToCBOR (..))
 import Cardano.Crypto.Hash (hashToBytes, hashWith, sizeHash)
 import Cardano.Crypto.Util (SignableRepresentation, bytesToNatural)
 import Cardano.Ledger.Hashes (HASH, Hash)
 import Cardano.Leios.Types
+import qualified Codec.CBOR.Decoding as D
+import qualified Codec.CBOR.Encoding as E
 import Data.ByteString
 import Data.Coerce (coerce)
 import Data.Data (Proxy (..))
+import Data.Typeable (Typeable)
 import Numeric.Natural (Natural)
 
 -- In Linear Leios we use BLS signature key material in three different ways.
@@ -152,3 +156,21 @@ verifyPossessionProofLeios (PublicKeyLeios (nId, vk)) pId = verifyPossessionProo
   where
     ctx = blsCtx (Proxy @'PoP) nId
     ctx' = ctx {blsSignContextAug = blsSignContextAug ctx <> Just ((hashToBytes . unKeyHash) pId)}
+
+--------------------------------------------------------------------------------
+-- CBOR Serialization
+--------------------------------------------------------------------------------
+
+-- | ToCBOR instance for SignatureLeios
+-- Encodes using the raw serialization of the BLS signature
+instance Typeable r => ToCBOR (SignatureLeios r) where
+  toCBOR (SignatureLeios sig) = E.encodeBytes (rawSerialiseSigDSIGN sig)
+
+-- | FromCBOR instance for SignatureLeios
+-- Decodes using the raw deserialization of the BLS signature
+instance Typeable r => FromCBOR (SignatureLeios r) where
+  fromCBOR = do
+    bs <- D.decodeBytes
+    case rawDeserialiseSigDSIGN bs of
+      Nothing -> fail "Failed to deserialize BLS signature"
+      Just sig -> return (SignatureLeios sig)

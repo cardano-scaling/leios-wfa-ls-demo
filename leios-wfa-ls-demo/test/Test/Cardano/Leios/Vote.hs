@@ -87,7 +87,8 @@ prop_persistentVoteRoundtrip :: Property
 prop_persistentVoteRoundtrip =
   forAllBlind genOrderedSetOfParties $ \osp ->
     let nonce = makePraosNonce $ BSC.pack "test-nonce"
-        committee = wFA nonce osp
+        nId = Testnet (NetworkMagic 42)
+        committee = wFA nId nonce osp
         persistentVoters = persistentSeats committee
         eId = testElectionId
         ebHash = testEndorserBlockHash
@@ -121,7 +122,8 @@ prop_nonPersistentVoteRoundtrip :: Property
 prop_nonPersistentVoteRoundtrip =
   forAllBlind genOrderedSetOfParties $ \osp ->
     let nonce = makePraosNonce $ BSC.pack "test-nonce"
-        committee = wFA nonce osp
+        nId = Testnet (NetworkMagic 42)
+        committee = wFA nId nonce osp
         nonPersistentVotersData = voters $ nonPersistentVoters committee
         eId = testElectionId
         ebHash = testEndorserBlockHash
@@ -217,7 +219,8 @@ prop_persistentVoteCBORRoundtrip :: Property
 prop_persistentVoteCBORRoundtrip =
   forAllBlind genOrderedSetOfParties $ \osp ->
     let nonce = makePraosNonce $ BSC.pack "test-nonce"
-        committee = wFA nonce osp
+        nId = Testnet (NetworkMagic 42)
+        committee = wFA nId nonce osp
         eId = testElectionId
         ebHash = testEndorserBlockHash
         -- Create all possible persistent votes
@@ -258,7 +261,8 @@ prop_nonPersistentVoteCBORRoundtrip :: Property
 prop_nonPersistentVoteCBORRoundtrip =
   forAllBlind genOrderedSetOfParties $ \osp ->
     let nonce = makePraosNonce $ BSC.pack "test-nonce"
-        committee = wFA nonce osp
+        nId = Testnet (NetworkMagic 42)
+        committee = wFA nId nonce osp
         eId = testElectionId
         ebHash = testEndorserBlockHash
         nonPersistentVotersData = voters $ nonPersistentVoters committee
@@ -298,7 +302,8 @@ prop_leiosVoteCBORRoundtrip :: Property
 prop_leiosVoteCBORRoundtrip =
   forAllBlind genOrderedSetOfParties $ \osp ->
     let nonce = makePraosNonce $ BSC.pack "test-nonce"
-        committee = wFA nonce osp
+        nId = Testnet (NetworkMagic 42)
+        committee = wFA nId nonce osp
         eId = testElectionId
         ebHash = testEndorserBlockHash
         -- Create all possible persistent votes

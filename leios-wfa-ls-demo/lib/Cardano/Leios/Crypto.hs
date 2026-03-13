@@ -18,6 +18,7 @@ module Cardano.Leios.Crypto (
   KeyRoleLeios (..),
   PublicKeyLeios (..),
   PrivateKeyLeios (..),
+  SignatureLeios (..),
   verifyPossessionProofLeios,
   createPossessionProofLeios,
   coercePrivateKeyLeios,

@@ -111,8 +111,9 @@ testNetworkId = Testnet (NetworkMagic 42)
 prop_nonPersistentStakesSumToOne :: Property
 prop_nonPersistentStakesSumToOne =
   forAllBlind genOrderedSetOfParties $ \osp ->
-    let nonce = makePraosNonce $ BSC.pack "test-nonce"
-        committee = wFA nonce osp
+    let nId = Testnet (NetworkMagic 42)
+        nonce = makePraosNonce $ BSC.pack "test-nonce"
+        committee = wFA nId nonce osp
         nonPersVoters = voters $ nonPersistentVoters committee
         stakesSum = sum $ map stakeNonPersistentVoter $ Map.elems nonPersVoters
         -- Handle edge case where all voters are persistent (no non-persistent voters to normalize)

@@ -60,7 +60,8 @@ prop_localSortitionNoError :: Property
 prop_localSortitionNoError =
   forAllBlind genOrderedSetOfParties $ \osp ->
     let nonce = makePraosNonce $ BSC.pack "test-nonce"
-        committee = wFA nonce osp
+        nId = Testnet (NetworkMagic 42)
+        committee = wFA nId nonce osp
         nonPersVoters = voters $ nonPersistentVoters committee
         -- Calculate n2: the number of non-persistent seats
         -- n2 = target committee size - number of persistent voters

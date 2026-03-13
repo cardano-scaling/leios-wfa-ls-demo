@@ -158,7 +158,7 @@ main = do
 runSimulation :: NetworkId -> OrderedSetOfParties -> Int -> IO ()
 runSimulation nId osp numRounds = do
   let epochNonce = makePraosNonce $ BSC.pack "simulation-nonce"
-      committee = wFA epochNonce osp
+      committee = wFA nId epochNonce osp
       nonPersVoters = nonPersistentVoters committee
       persistentCount = Map.size (persistentSeats committee)
       n2 = fromIntegral @CommitteeSize @Integer (committeeSize osp) - fromIntegral persistentCount

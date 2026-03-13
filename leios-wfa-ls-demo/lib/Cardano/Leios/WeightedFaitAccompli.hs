@@ -17,7 +17,7 @@ module Cardano.Leios.WeightedFaitAccompli (
   rho,
 ) where
 
-import Cardano.Api (PraosNonce)
+import Cardano.Api (NetworkId, PraosNonce)
 import Cardano.Leios.Committee
 import Cardano.Leios.Crypto
 import Data.List (find)
@@ -168,17 +168,19 @@ data CommitteeSelection = CommitteeSelection
   , praosNonce :: PraosNonce
   , targetCommitteeSize :: CommitteeSize
   , nonPersistentSeats :: NonPersistentSeats
+  , networkId :: NetworkId
   }
   deriving (Show)
 
-wFA :: PraosNonce -> OrderedSetOfParties -> CommitteeSelection
-wFA nonce osp@(OrderedSetOfParties prts n) =
+wFA :: NetworkId -> PraosNonce -> OrderedSetOfParties -> CommitteeSelection
+wFA nId nonce osp@(OrderedSetOfParties prts n) =
   CommitteeSelection
     { persistentSeats = persSeats
     , nonPersistentVoters = nonPersVoters
     , praosNonce = nonce
     , targetCommitteeSize = n
     , nonPersistentSeats = n2
+    , networkId = nId
     }
   where
     iStar = findIStarAcc osp

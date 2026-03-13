@@ -127,6 +127,26 @@ verifyNonPersistentVote CommitteeSelection {nonPersistentVoters, nonPersistentSe
         then Right $ (fromIntegral @Int @Integer seats % 1) * weightPerNonPersistentSeat nonPersistentVoters
         else Left "verifyNonPersistentVote: voter did not win any seats in local sortition"
 
+-- | Check non-persistent vote eligibility (local sortition only, no signature verification)
+-- This is used for certificate verification where signatures are batch-verified separately.
+-- Returns the weight if the voter won at least one seat.
+checkNonPersistentVoteEligibility ::
+  CommitteeSelection ->
+  NonPersistentVoter ->
+  OutputVRF ->
+  Either String Weight
+checkNonPersistentVoteEligibility CommitteeSelection {nonPersistentVoters, nonPersistentSeats} voter vrfOutput = do
+  -- Check if the voter won at least one seat via local sortition
+  seats <- case checkLeaderValueLeios
+    vrfOutput
+    (stakeNonPersistentVoter voter)
+    (fromIntegral @NonPersistentSeats @Integer nonPersistentSeats) of
+    Left err -> Left $ "checkNonPersistentVoteEligibility: local sortition failed: " ++ show err
+    Right s -> Right s
+  if seats >= 1
+    then Right $ (fromIntegral @Int @Integer seats % 1) * weightPerNonPersistentSeat nonPersistentVoters
+    else Left "checkNonPersistentVoteEligibility: voter did not win any seats in local sortition"
+
 createPersistentVote ::
   CommitteeSelection ->
   PrivateKeyLeios 'Vote ->

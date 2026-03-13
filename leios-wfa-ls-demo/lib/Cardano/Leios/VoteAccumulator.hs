@@ -10,10 +10,10 @@ module Cardano.Leios.VoteAccumulator (
   -- * Certificate selection tactics
   CertificateSelectionTactic (..),
   selectVotesForCertificate,
-  -- createCertificateFromAccumulator,
+  createCertificateFromAccumulator,
 ) where
 
--- import Cardano.Leios.Certificate (Certificate, createCertificate)
+import Cardano.Leios.Certificate (Certificate, createCertificate)
 import Cardano.Leios.Types (ElectionId, EndorserBlockHash, PoolId, Weight)
 import Cardano.Leios.Vote (
   LeiosVote (..),
@@ -175,14 +175,14 @@ selectRandomUntilThreshold =
 -- Certificate Creation from Accumulator
 --------------------------------------------------------------------------------
 
--- -- | Create a certificate from the accumulator using a selection tactic
--- createCertificateFromAccumulator ::
---   ElectionId ->
---   EndorserBlockHash ->
---   CommitteeSelection ->
---   CertificateSelectionTactic ->
---   VoteAccumulator ->
---   Either String Certificate
--- createCertificateFromAccumulator eId ebHash committee tactic acc = do
---   (selectedVotes, _weight) <- selectVotesForCertificate tactic acc
---   createCertificate eId ebHash committee selectedVotes
+-- | Create a certificate from the accumulator using a selection tactic
+createCertificateFromAccumulator ::
+  ElectionId ->
+  EndorserBlockHash ->
+  CommitteeSelection ->
+  CertificateSelectionTactic ->
+  VoteAccumulator ->
+  Either String Certificate
+createCertificateFromAccumulator eId ebHash committee tactic acc = do
+  (selectedVotes, _weight) <- selectVotesForCertificate tactic acc
+  createCertificate eId ebHash committee selectedVotes

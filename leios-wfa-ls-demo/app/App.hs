@@ -64,7 +64,7 @@ main = do
           hPutStrLn stderr $ "'mkOrderedSetOfParties' error: " <> show err
         Right pools -> do
           let epochNonce = makePraosNonce $ BSC.pack "some-random-nonce"
-              committee = wFA epochNonce pools
+              committee = wFA nId epochNonce pools
               numPersistent =
                 (Map.size . persistentSeats) committee
               sumStakePersistentSeats :: Double

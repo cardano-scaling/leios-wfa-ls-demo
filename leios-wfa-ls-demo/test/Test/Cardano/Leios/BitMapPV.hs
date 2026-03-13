@@ -274,5 +274,3 @@ chooseInt = chooseInteger
 
 chooseInteger :: (Integral a, Integral b) => (a, a) -> Gen b
 chooseInteger (lo, hi) = fromIntegral <$> choose (fromIntegral lo :: Integer, fromIntegral hi :: Integer)
-
-

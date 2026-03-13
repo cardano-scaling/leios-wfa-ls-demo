@@ -22,6 +22,7 @@ library
     Cardano.Leios.Types
     Cardano.Leios.Utils
     Cardano.Leios.Vote
+    Cardano.Leios.VoteAccumulator
     Cardano.Leios.WeightedFaitAccompli
     Cardano.Query
     Cardano.Utils

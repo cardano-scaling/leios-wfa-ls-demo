@@ -117,4 +117,3 @@ instance FromCBOR BitMapPV where
     case rawDeserialiseBitMapPV maxIx bs of
       Nothing -> fail "BitMapPV: invalid bitmap data or size mismatch"
       Just bitmap -> pure bitmap
-

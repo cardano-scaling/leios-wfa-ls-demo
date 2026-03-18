@@ -74,9 +74,6 @@ data Certificate = Certificate
   , -- For non-persistent voters, we only store the eligibility signature (OutputVRF)
     -- Individual vote signatures are not stored, only aggregated in aggrVote
     npvVoters :: Map PoolId OutputVRF
-  , -- Aggregate of all NPV OutputVRF values (eligibility signatures)
-    -- This enables batch verification optimization
-    npvAggr :: Maybe OutputVRF
   , -- Aggregate of ALL vote signatures (both PV and NPV)
     aggrVote :: Vote
   }
@@ -143,24 +140,8 @@ createCertificate eId ebHash committee votes
           let pvIndices = map pvPersistentVoterId pvs
               bitmap = bitmapFromIndexes pvIndices maxPvIndex
 
-          -- Build map and collect eligibility signatures in one pass (single iteration over npvs)
-          let (npvMap, npvEligSigs) =
-                foldr
-                  ( \npv (accMap, accSigs) ->
-                      let poolId = npvPoolId npv
-                          eligSig = npvEligibilitySignature npv
-                       in (Map.insert poolId eligSig accMap, eligSig : accSigs)
-                  )
-                  (Map.empty, [])
-                  npvs
-
-          -- Aggregate non-persistent OutputVRF values (eligibility signatures) for batch verification
-          npvAggregate <-
-            if null npvEligSigs
-              then Right Nothing
-              else case aggregateOutputVRFs npvEligSigs of
-                Left err -> Left err
-                Right aggr -> Right (Just aggr)
+          -- Build map from pool ID to eligibility signature
+          let npvMap = Map.fromList $ map (\npv -> (npvPoolId npv, npvEligibilitySignature npv)) npvs
 
           -- Aggregate all vote signatures (both PV and NPV)
           let allSigs = map pvVoteSignature pvs ++ map npvVoteSignature npvs
@@ -172,7 +153,6 @@ createCertificate eId ebHash committee votes
               , certEndorserBlockHash = ebHash
               , pvVoters = bitmap
               , npvVoters = npvMap
-              , npvAggr = npvAggregate
               , aggrVote = aggrSig
               }
   where
@@ -194,7 +174,7 @@ verifyCertificate ::
   -- | Certificate to verify
   Certificate ->
   Either String Weight
-verifyCertificate eId ebHash committee Certificate {certElectionId, certEndorserBlockHash, pvVoters, npvVoters, npvAggr, aggrVote}
+verifyCertificate eId ebHash committee Certificate {certElectionId, certEndorserBlockHash, pvVoters, npvVoters, aggrVote}
   -- Step 1: Verify the certificate is for the expected election and endorser block (fail fast)
   | certElectionId /= eId =
       Left "verifyCertificate: certificate election ID does not match expected election ID"
@@ -222,15 +202,13 @@ verifyCertificate eId ebHash committee Certificate {certElectionId, certEndorser
           Left err -> Left $ "verifyCertificate: failed to aggregate NPV public keys: " ++ err
           Right key -> Right (Just key)
 
-      -- Step 4: Verify NPV aggregate eligibility signature (fail fast)
+      -- Step 4: Aggregate NPV eligibility signatures and verify against aggregate public key
       -- Only verify if there are NPV voters
       case npvAggrPubKey of
         Nothing -> Right () -- No NPV voters, skip verification
         Just aggrKey -> do
-          -- Check that NPV aggregate signature exists
-          npvAggrSig <- case npvAggr of
-            Nothing -> Left "verifyCertificate: certificate has NPV voters but missing NPV aggregate signature"
-            Just sig -> Right sig
+          -- Aggregate the eligibility signatures stored in the certificate
+          npvAggrSig <- aggregateOutputVRFs npvEligSigs
 
           -- Verify NPV aggregate eligibility signature against Nonce || eId
           -- Note: VRF outputs use the 'VRF role, not 'Vote role
@@ -310,26 +288,24 @@ decodeNpvMap = do
       return (poolId, eligSig)
 
 -- | ToCBOR instance for Certificate
--- Encodes as: [election_id, endorser_block_hash, pv_voters, npv_voters, npv_aggr, aggr_vote]
+-- Encodes as: [election_id, endorser_block_hash, pv_voters, npv_voters, aggr_vote]
 instance ToCBOR Certificate where
-  toCBOR Certificate {certElectionId, certEndorserBlockHash, pvVoters, npvVoters, npvAggr, aggrVote} =
-    E.encodeListLen 6
+  toCBOR Certificate {certElectionId, certEndorserBlockHash, pvVoters, npvVoters, aggrVote} =
+    E.encodeListLen 5
       <> toCBOR certElectionId
       <> toCBOR certEndorserBlockHash
       <> toCBOR pvVoters
       <> encodeNpvMap npvVoters
-      <> toCBOR npvAggr
       <> toCBOR aggrVote
 
 -- | FromCBOR instance for Certificate
 instance FromCBOR Certificate where
   fromCBOR = do
-    D.decodeListLenOf 6
+    D.decodeListLenOf 5
     !eId <- fromCBOR
     !ebHash <- fromCBOR
     !pvVoters <- fromCBOR
     !npvVoters <- decodeNpvMap
-    !npvAggr <- fromCBOR
     !aggrVote <- fromCBOR
     return $
       Certificate
@@ -337,6 +313,5 @@ instance FromCBOR Certificate where
         , certEndorserBlockHash = ebHash
         , pvVoters = pvVoters
         , npvVoters = npvVoters
-        , npvAggr = npvAggr
         , aggrVote = aggrVote
         }

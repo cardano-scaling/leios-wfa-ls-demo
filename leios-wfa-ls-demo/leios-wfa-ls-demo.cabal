@@ -102,10 +102,22 @@ test-suite tests
     tasty,
     tasty-quickcheck,
 
--- benchmark bench
---   type: exitcode-stdio-1.0
---   main-is: Bench.hs
---   hs-source-dirs: bench
---   build-depends:
---     base >=4.9 && <5,
---     leios-wfa-ls-demo,
+benchmark bench
+  import: lang
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  hs-source-dirs: bench
+  other-modules:
+    Bench.PersistentVote
+    Bench.NonPersistentVote
+    Bench.Utils
+  build-depends:
+    base >=4.9 && <5,
+    bytestring,
+    cardano-api ^>=10.16,
+    cardano-crypto-class,
+    cardano-ledger-core,
+    containers,
+    criterion,
+    deepseq,
+    leios-wfa-ls-demo,

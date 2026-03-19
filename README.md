@@ -145,6 +145,8 @@ nix run .#leios-wfa-ls-demo-bench -- --csv bench-report.csv --output bench-repor
 
 ### Analysis
 
+> Results collected on a 12th Gen Intel® Core™ i9-12900H × 20 / 64 GiB machine.
+
 #### Votes
 
 **PV (persistent vote)**

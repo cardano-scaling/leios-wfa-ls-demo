@@ -108,6 +108,7 @@ benchmark bench
   main-is: Main.hs
   hs-source-dirs: bench
   other-modules:
+    Bench.Certificate
     Bench.NonPersistentVote
     Bench.PersistentVote
     Bench.Utils
@@ -116,8 +117,10 @@ benchmark bench
     base >=4.9 && <5,
     bytestring,
     cardano-api ^>=10.16,
+    cardano-binary,
     cardano-crypto-class,
     cardano-ledger-core,
+    cborg,
     containers,
     criterion,
     deepseq,

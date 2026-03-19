@@ -1,0 +1,211 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeApplications #-}
+
+module Bench.Certificate (benchmarks) where
+
+import Bench.Utils (BenchEnv (..), randomBenchInputs)
+import Cardano.Api (NetworkId (..), NetworkMagic (..))
+import Cardano.Binary (ToCBOR (toCBOR))
+import Cardano.Leios.Certificate (createCertificate, verifyCertificate)
+import Cardano.Leios.Committee (OrderedSetOfParties (..), Party (..), mkOrderedSetOfParties)
+import Cardano.Leios.Crypto (KeyRoleLeios (..), PrivateKeyLeios (..))
+import Cardano.Leios.Types (ElectionId, EndorserBlockHash)
+import Cardano.Leios.Utils (createParties, toSkForBLS)
+import Cardano.Leios.Vote (
+  LeiosVote (..),
+  createNonPersistentVote,
+  createPersistentVote,
+ )
+import Cardano.Leios.WeightedFaitAccompli (
+  CommitteeSelection (..),
+  NonPersistentLocalSortition (..),
+  wFA,
+ )
+import Cardano.Query (mkLocalNodeConnInfo, queryPoolDistrMap, renderQueryError)
+import Codec.CBOR.Write (toStrictByteString)
+import Control.Exception (evaluate)
+import Control.Monad (void)
+import Criterion.Main (Benchmark, bench, bgroup, perRunEnv)
+import qualified Data.ByteString as BS
+import qualified Data.Map.Strict as Map
+import System.Environment (lookupEnv)
+
+-- | Build PV and NPV votes for a bench run (not timed).
+-- Takes up to pvCount PV votes (always succeed for PV parties) and up to
+-- npvCount NPV votes by trying all npvPrivKeys under sortition.
+buildVotes ::
+  CommitteeSelection ->
+  [PrivateKeyLeios 'Vote] ->
+  [PrivateKeyLeios 'Vote] ->
+  ElectionId ->
+  EndorserBlockHash ->
+  Int ->
+  Int ->
+  [LeiosVote]
+buildVotes committee pvPrivKeys npvPrivKeys eId ebHash pvCount npvCount =
+  pvVotes ++ take npvCount npvCandidates
+  where
+    nonce = praosNonce committee
+    pvVotes =
+      [ LeiosPersistentVote v
+      | k <- take pvCount pvPrivKeys
+      , Right v <- [createPersistentVote committee k eId ebHash]
+      ]
+    npvCandidates =
+      [ LeiosNonPersistentVote v
+      | k <- npvPrivKeys
+      , Right v <- [createNonPersistentVote nonce committee k eId ebHash]
+      ]
+
+-- | A single named range benchmark group with create + verify benches.
+rangeBench ::
+  CommitteeSelection ->
+  [PrivateKeyLeios 'Vote] ->
+  [PrivateKeyLeios 'Vote] ->
+  String ->
+  Int ->
+  Int ->
+  Benchmark
+rangeBench committee pvPrivKeys npvPrivKeys label pvCount npvCount =
+  bgroup
+    label
+    [ bench "create" $
+        perRunEnv
+          ( do
+              (_, eId, ebHash) <- randomBenchInputs
+              let votes = buildVotes committee pvPrivKeys npvPrivKeys eId ebHash pvCount npvCount
+              return $! BenchEnv (eId, ebHash, votes)
+          )
+          ( \(BenchEnv (eId, ebHash, votes)) ->
+              case createCertificate eId ebHash committee votes of
+                Left err -> error $ "cert create bench: " ++ err
+                Right cert -> void (evaluate cert)
+          )
+    , bench "verify" $
+        perRunEnv
+          ( do
+              (_, eId, ebHash) <- randomBenchInputs
+              let votes = buildVotes committee pvPrivKeys npvPrivKeys eId ebHash pvCount npvCount
+              case createCertificate eId ebHash committee votes of
+                Left err -> error $ "cert verify setup: " ++ err
+                Right cert -> return $! BenchEnv (eId, ebHash, cert)
+          )
+          ( \(BenchEnv (eId, ebHash, cert)) ->
+              void . evaluate $ verifyCertificate eId ebHash committee cert
+          )
+    ]
+
+-- | Map a fraction to a count, returning 0 verbatim for 0 fractions
+-- and clamping to at least 1 otherwise.
+countFromFrac :: Double -> Int -> Int
+countFromFrac frac n
+  | frac == 0.0 = 0
+  | n == 0 = 0
+  | otherwise = max 1 (round (frac * fromIntegral n))
+
+rangeLabel :: Int -> Int -> String
+rangeLabel pvCount npvCount = "pv=" ++ show pvCount ++ ",npv=" ++ show npvCount
+
+-- | 6-step pv-sweep: vary PV [1, 10%, 25%, 50%, 75%, 100%], NPV fixed at 0.
+pvSweepRanges :: Int -> [(Int, Int)]
+pvSweepRanges numPV =
+  [ (max 1 (round (frac * fromIntegral numPV :: Double)), 0)
+  | frac <- [1.0 / fromIntegral (max 1 numPV), 0.1, 0.25, 0.5, 0.75, 1.0]
+  ]
+
+-- | 6-step npv-sweep: vary NPV winners [0, 10%, 25%, 50%, 75%, 100%], PV fixed at 1.
+npvSweepRanges :: Int -> [(Int, Int)]
+npvSweepRanges numNPVWinners =
+  [ (1, countFromFrac frac numNPVWinners)
+  | frac <- [0.0, 0.1, 0.25, 0.5, 0.75, 1.0]
+  ]
+
+-- | 6-step diagonal: both vary (pvFrac, npvFrac) pairs.
+diagonalRanges :: Int -> Int -> [(Int, Int)]
+diagonalRanges numPV numNPVWinners =
+  [ ( max 1 (round (pvFrac * fromIntegral numPV :: Double))
+    , countFromFrac npvFrac numNPVWinners
+    )
+  | (pvFrac, npvFrac) <-
+      [ (1.0 / fromIntegral (max 1 numPV), 1.0)
+      , (0.1, 0.9)
+      , (0.25, 0.75)
+      , (0.5, 0.5)
+      , (0.75, 0.25)
+      , (1.0, 0.0)
+      ]
+  ]
+
+benchmarks :: IO [Benchmark]
+benchmarks = do
+  mSocket <- lookupEnv "LEIOS_BENCH_NODE_SOCKET"
+  case mSocket of
+    Nothing -> do
+      putStrLn "cert: LEIOS_BENCH_NODE_SOCKET not set; skipping certificate benchmarks"
+      return []
+    Just socketPath -> do
+      mMagicStr <- lookupEnv "LEIOS_BENCH_NETWORK_MAGIC"
+      let magic = maybe 764824073 read mMagicStr :: Int
+          nId = Testnet (NetworkMagic (fromIntegral magic))
+      poolDistrResult <- queryPoolDistrMap (mkLocalNodeConnInfo magic socketPath 0)
+      case poolDistrResult of
+        Left err -> do
+          putStrLn $ "cert: query failed: " ++ renderQueryError err
+          return []
+        Right poolDistr -> do
+          let ps = createParties nId (Map.toList poolDistr)
+          case mkOrderedSetOfParties 575 ps of
+            Left mkErr -> do
+              putStrLn $ "cert: mkOrderedSetOfParties failed: " ++ show mkErr
+              return []
+            Right orderedPs -> do
+              (nonce, _, _) <- randomBenchInputs
+              let committee = wFA nId nonce orderedPs
+                  numPV = Map.size (persistentSeats committee)
+                  numNPVVoters = Map.size (voters (nonPersistentVoters committee))
+              putStrLn $
+                "cert: committee numPV="
+                  ++ show numPV
+                  ++ " numNPVVoters="
+                  ++ show numNPVVoters
+                  ++ " targetSize=575"
+
+              -- Derive private keys for all parties (ordered by descending stake)
+              let orderedPsList = parties orderedPs
+                  mkKey p = PrivateKeyLeios (nId, toSkForBLS (poolId p))
+                  pvPrivKeys = map mkKey (take numPV orderedPsList)
+                  npvPrivKeys = map mkKey (drop numPV orderedPsList)
+
+              -- Sample one (eId, ebHash) to count NPV winners and log cert sizes
+              (_, sampleEId, sampleEbHash) <- randomBenchInputs
+              let sampleNonce = praosNonce committee
+                  numNPVWinners =
+                    length
+                      [ ()
+                      | k <- npvPrivKeys
+                      , Right _ <- [createNonPersistentVote sampleNonce committee k sampleEId sampleEbHash]
+                      ]
+              putStrLn $
+                "cert: npvWinners="
+                  ++ show numNPVWinners
+                  ++ "/"
+                  ++ show numNPVVoters
+                  ++ " (sample draw)"
+
+              -- Helper: build and return range benches, logging cert size for each step
+              let buildGroup groupName ranges = do
+                    rangebenches <- mapM (logAndBench groupName) ranges
+                    return $ bgroup groupName rangebenches
+                  logAndBench groupName (pvc, npvc) = do
+                    let lbl = rangeLabel pvc npvc
+                        votes = buildVotes committee pvPrivKeys npvPrivKeys sampleEId sampleEbHash pvc npvc
+                        certSizeStr = case createCertificate sampleEId sampleEbHash committee votes of
+                          Left e -> "error: " ++ e
+                          Right cert -> show (BS.length (toStrictByteString (toCBOR cert))) ++ " bytes"
+                    putStrLn $ "cert " ++ groupName ++ "/" ++ lbl ++ ": size=" ++ certSizeStr
+                    return $ rangeBench committee pvPrivKeys npvPrivKeys lbl pvc npvc
+
+              pvBench <- buildGroup "pv-sweep" (pvSweepRanges numPV)
+              npvBench <- buildGroup "npv-sweep" (npvSweepRanges numNPVWinners)
+              diagBench <- buildGroup "diagonal" (diagonalRanges numPV numNPVWinners)
+              return [pvBench, npvBench, diagBench]

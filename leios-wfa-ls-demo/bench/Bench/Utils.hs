@@ -1,21 +1,21 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Bench.Utils
-  ( BenchEnv (..)
-  , testNetworkId
-  , testEbHash
-  , testElectionId
-  , mkPoolId
-  , mkPrivKey
-  , mkPubKey
-  , mkPVCommittee
-  , mkNPVCommittee
-  , randomBenchInputs
-  , findWinningInput
-  , findLosingInput
-  , feasibleForLose
-  ) where
+module Bench.Utils (
+  BenchEnv (..),
+  testNetworkId,
+  testEbHash,
+  testElectionId,
+  mkPoolId,
+  mkPrivKey,
+  mkPubKey,
+  mkPVCommittee,
+  mkNPVCommittee,
+  randomBenchInputs,
+  findWinningInput,
+  findLosingInput,
+  feasibleForLose,
+) where
 
 import Cardano.Api (NetworkId (..), NetworkMagic (..), PraosNonce)
 import Cardano.Api.Shelley (makePraosNonce)
@@ -26,12 +26,12 @@ import Cardano.Leios.Crypto (KeyRoleLeios (..), PrivateKeyLeios (..), PublicKeyL
 import Cardano.Leios.Types (ElectionId, EndorserBlockHash, PoolId)
 import Cardano.Leios.Utils (toSkForBLS, toVerKeyForBLS)
 import Cardano.Leios.Vote (NonPersistentVote, createNonPersistentVote)
-import Cardano.Leios.WeightedFaitAccompli
-  ( CommitteeSelection (..)
-  , NonPersistentLocalSortition (..)
-  , NonPersistentVoter (..)
-  , PersistentSeat (..)
-  )
+import Cardano.Leios.WeightedFaitAccompli (
+  CommitteeSelection (..),
+  NonPersistentLocalSortition (..),
+  NonPersistentVoter (..),
+  PersistentSeat (..),
+ )
 import Control.DeepSeq (NFData (..))
 import Data.Bits (shiftL, (.|.))
 import qualified Data.ByteString as BS
@@ -76,7 +76,8 @@ mkPVCommittee (PrivateKeyLeios (nId, sk)) =
   CommitteeSelection
     { persistentSeats =
         Map.fromList
-          [ ( 0
+          [
+            ( 0
             , PersistentSeat
                 { publicVoteKeyPersistent = PublicKeyLeios (nId, deriveVerKeyDSIGN sk)
                 , weightPersistentSeat = 1 % 1
@@ -104,7 +105,8 @@ mkNPVCommittee sigma n2 pId pubKey =
         NonPersistentLocalSortition
           { voters =
               Map.fromList
-                [ ( pId
+                [
+                  ( pId
                   , NonPersistentVoter
                       { publicVoteKeyNonPersistent = pubKey
                       , stakeNonPersistentVoter = sigma
@@ -137,10 +139,10 @@ randomBenchInputs = do
   return (nonce, eId, ebHash)
 
 -- | Scan random inputs until createNonPersistentVote returns Right (pool wins ≥1 seat).
-findWinningInput
-  :: CommitteeSelection
-  -> PrivateKeyLeios 'Vote
-  -> IO (PraosNonce, ElectionId, EndorserBlockHash, NonPersistentVote)
+findWinningInput ::
+  CommitteeSelection ->
+  PrivateKeyLeios 'Vote ->
+  IO (PraosNonce, ElectionId, EndorserBlockHash, NonPersistentVote)
 findWinningInput cs privKey = go
   where
     go = do
@@ -151,10 +153,10 @@ findWinningInput cs privKey = go
 
 -- | Scan random inputs until createNonPersistentVote returns Left (sortition failure).
 -- Only call for (σ, n2) where λ = σ×n2 < 5 (see feasibleForLose).
-findLosingInput
-  :: CommitteeSelection
-  -> PrivateKeyLeios 'Vote
-  -> IO (PraosNonce, ElectionId, EndorserBlockHash)
+findLosingInput ::
+  CommitteeSelection ->
+  PrivateKeyLeios 'Vote ->
+  IO (PraosNonce, ElectionId, EndorserBlockHash)
 findLosingInput cs privKey = go
   where
     go = do

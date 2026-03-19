@@ -3,23 +3,23 @@
 
 module Bench.NonPersistentVote (benchmarks) where
 
-import Bench.Utils
-  ( BenchEnv (..)
-  , feasibleForLose
-  , findLosingInput
-  , findWinningInput
-  , mkNPVCommittee
-  , mkPoolId
-  , mkPrivKey
-  , mkPubKey
-  )
+import Bench.Utils (
+  BenchEnv (..),
+  feasibleForLose,
+  findLosingInput,
+  findWinningInput,
+  mkNPVCommittee,
+  mkPoolId,
+  mkPrivKey,
+  mkPubKey,
+ )
 import Cardano.Leios.LocalSortition (checkLeaderValueLeios)
-import Cardano.Leios.Vote
-  ( LeiosVote (..)
-  , NonPersistentVote (..)
-  , createNonPersistentVote
-  , verifyLeiosVote
-  )
+import Cardano.Leios.Vote (
+  LeiosVote (..),
+  NonPersistentVote (..),
+  createNonPersistentVote,
+  verifyLeiosVote,
+ )
 import Cardano.Leios.WeightedFaitAccompli (CommitteeSelection (..))
 import Control.Exception (evaluate)
 import Control.Monad (void)
@@ -55,34 +55,34 @@ benchmarks =
                               Right vote -> void $ evaluate (npvVoteSignature vote)
                         )
                   ]
-                    -- Creation (lose): only when λ = σ×n2 < 5
+                    -- Creation (lose): only probable when λ = σ×n2 < 5
                     ++ [ bench "create-lose" $
-                          perRunEnv
-                            (BenchEnv <$> findLosingInput cs privKey)
-                            ( \(BenchEnv (nonce, eId, ebHash)) ->
-                                void . evaluate $ createNonPersistentVote nonce cs privKey eId ebHash
-                            )
+                           perRunEnv
+                             (BenchEnv <$> findLosingInput cs privKey)
+                             ( \(BenchEnv (nonce, eId, ebHash)) ->
+                                 void . evaluate $ createNonPersistentVote nonce cs privKey eId ebHash
+                             )
                        | feasibleForLose sigma n2
                        ]
                     -- Verification: per-run setup finds a winning vote
                     ++ [ bench "verify" $
-                          perRunEnv
-                            (BenchEnv <$> findWinningInput cs privKey)
-                            ( \(BenchEnv (nonce, eId, ebHash, vote)) ->
-                                let cs' = cs{praosNonce = nonce}
-                                 in void . evaluate $
-                                      verifyLeiosVote cs' eId ebHash (LeiosNonPersistentVote vote)
-                            )
+                           perRunEnv
+                             (BenchEnv <$> findWinningInput cs privKey)
+                             ( \(BenchEnv (nonce, eId, ebHash, vote)) ->
+                                 let cs' = cs {praosNonce = nonce}
+                                  in void . evaluate $
+                                       verifyLeiosVote cs' eId ebHash (LeiosNonPersistentVote vote)
+                             )
                        , -- Isolated Taylor expansion: fresh VRF output per run
                          bench "sortition-check" $
-                          perRunEnv
-                            ( BenchEnv . npvEligibilitySignature . (\(_, _, _, v) -> v)
-                                <$> findWinningInput cs privKey
-                            )
-                            ( \(BenchEnv vrfOut) ->
-                                void . evaluate $
-                                  checkLeaderValueLeios vrfOut sigma (fromIntegral @Word16 @Integer n2)
-                            )
+                           perRunEnv
+                             ( BenchEnv . npvEligibilitySignature . (\(_, _, _, v) -> v)
+                                 <$> findWinningInput cs privKey
+                             )
+                             ( \(BenchEnv vrfOut) ->
+                                 void . evaluate $
+                                   checkLeaderValueLeios vrfOut sigma (fromIntegral @Word16 @Integer n2)
+                             )
                        ]
           | sigma <- sigmaValues
           ]

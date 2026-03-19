@@ -28,4 +28,4 @@ result*
 
 *.csv
 *.cbor
-!bench-report.csv
+!bench-report-votes.csv

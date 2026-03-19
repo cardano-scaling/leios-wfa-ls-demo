@@ -190,3 +190,23 @@ Verification is fast and cheap regardless of composition:
 - **Diagonal**: Stays within ~2.15–2.4 ms throughout, with a slight drop when NPV falls to zero.
 
 **Key takeaway:** cert verification cost is essentially O(total votes) with small constants on both PV and NPV paths. Cert creation cost is the bottleneck, and NPV aggregation is the expensive part — a design that favours PV over NPV significantly reduces creation time.
+
+**Certificate size**
+
+Serialised certificate size depends only on the number of NPV winners, not on the PV count:
+
+| Sweep | pv | npv winners | size (bytes) |
+|---|---|---|---|
+| pv-sweep | 1–482 | 0 | 162 |
+| npv-sweep | 1 | 0 | 162 |
+| npv-sweep | 1 | 8 | 802 |
+| npv-sweep | 1 | 21 | 1 842 |
+| npv-sweep | 1 | 42 | 3 523 |
+| npv-sweep | 1 | 63 | 5 203 |
+| npv-sweep | 1 | 84 | 6 883 |
+| diagonal | 1 | 84 | 6 883 |
+| diagonal | 48 | 76 | 6 243 |
+| diagonal | 120 | 63 | 5 203 |
+| diagonal | 241 | 42 | 3 523 |
+| diagonal | 362 | 21 | 1 842 |
+| diagonal | 482 | 0 | 162 |

@@ -49,11 +49,12 @@ nix run .#leios-wfa-ls-demo-exe -- --network-magic 2 --socket-path /tmp/preview/
 | NPV vote create (winner) | ~400 μs |
 | NPV vote create (loser, early exit) | ~270 μs |
 | NPV vote verify | ~1.65 ms |
-| Cert create — PV-only (480 votes) | ~200 ms |
-| Cert create — NPV-only (84 winners) | ~1650 ms |
-| Cert verify — any composition | ~1–2.5 ms |
+| Cert create — PV-only (481 votes) | ~350 μs |
+| Cert create — NPV-only (94 winners) | ~57 μs |
+| Cert verify — PV-only (481 votes) | ~1.6 ms |
+| Cert verify — NPV-only (94 winners) | ~9.3 ms |
 
-**Bottom line:** individual vote creation and verification are fast (~400 μs and ~1.65 ms respectively). Certificate creation cost is dominated by NPV aggregation — a full NPV cert is ~8× slower to create than a PV-only cert, though both verify in under 2.5 ms.
+**Bottom line:** individual vote creation and verification are fast (~400 μs and ~1.65 ms respectively). Certificate creation is now fast (<400 μs for any composition). Certificate verification scales with NPV count — a PV-only cert verifies in ~1.6 ms, while a full NPV cert (94 winners) takes ~9.3 ms due to the linearized key aggregation required.
 
 ---
 
@@ -168,30 +169,28 @@ The λ-collapse plot confirms that `sortition-check` cost collapses onto a singl
 
 #### Certificates
 
-Cert benchmarks use the live mainnet stake distribution with a target committee size of 575. The run used for the charts yielded approximately 480 PV seats and 84 NPV winners (out of ~700 NPV voters).
+Cert benchmarks use the live mainnet stake distribution with a target committee size of 575. The run used for the charts yielded approximately 481 PV seats and 94 NPV winners (out of ~700 NPV voters).
 
 **Creation**
 
-Creation aggregates BLS signatures from all included votes:
+Creation uses plain BLS signature aggregation (scalar 1 per voter), making it very fast:
 
-- **PV-sweep** (npv=0, pv up to 480): Cost scales roughly linearly from ~0 ms (1 vote) to ~200 ms (480 votes), about 0.4 ms per PV vote. This is consistent with individual PV create times.
-- **NPV-sweep** (pv=1, npv up to 84): Cost scales super-linearly, reaching ~1650 ms at 84 winners (with high variance: 800–2300 ms). Each NPV vote is ~20× more expensive to aggregate than a PV vote in cert creation.
-- **Diagonal** (pv↑ as npv↓): Confirms that NPV votes dominate creation cost. Going from (pv=1, npv=84) to (pv=480, npv=0) drops creation time from ~2.2 s to ~200 ms. As soon as NPV votes are reduced, creation time falls sharply.
-
-The high variance in NPV cert creation (visible in the confidence bands) likely reflects non-determinism in the underlying BLS key aggregation path.
+- **PV-sweep** (npv=0, pv up to 481): Scales linearly from ~0.85 μs (1 vote) to ~350 μs (481 votes), about 0.73 μs per PV vote.
+- **NPV-sweep** (pv=1, npv up to 94): Scales linearly from ~7.4 μs (9 winners) to ~57 μs (94 winners), about 0.6 μs per NPV vote. NPV and PV aggregation are similarly cheap.
+- **Diagonal** (pv↑ as npv↓): Confirms that creation cost is determined by total vote count rather than vote type. Times range from ~68 μs (pv=1, npv=94) to ~344 μs (pv=481, npv=0).
 
 ![Cert cost comparison](analysis/cert_cost_comparison.png)
 ![Cert diagonal](analysis/cert_diagonal.png)
 
 **Verification**
 
-Verification is fast and cheap regardless of composition:
+Verification cost is dominated by NPV count due to linearized multi-scalar multiplication (MSM) over NPV public keys, which is required to defend against VRF-output-swap attacks:
 
-- **PV-sweep**: ~0.85–1.6 ms across the full range of PV counts. Grows gently with vote count (one extra pairing per vote).
-- **NPV-sweep**: ~0.8–2.2 ms across 0–84 NPV winners. Higher than PV verify at equal counts, but still well under 3 ms for a full committee cert.
-- **Diagonal**: Stays within ~2.15–2.4 ms throughout, with a slight drop when NPV falls to zero.
+- **PV-sweep**: ~0.84–1.6 ms across the full range of PV counts. Grows gently with vote count (one extra pairing per vote).
+- **NPV-sweep**: ~0.85–9.3 ms across 0–94 NPV winners. Scales roughly linearly with NPV count (~100 μs per winner at this committee size).
+- **Diagonal**: Ranges from ~10.5 ms (pv=1, npv=94) down to ~1.6 ms (pv=481, npv=0), tracking NPV count almost exactly.
 
-**Key takeaway:** cert verification cost is essentially O(total votes) with small constants on both PV and NPV paths. Cert creation cost is the bottleneck, and NPV aggregation is the expensive part — a design that favours PV over NPV significantly reduces creation time.
+**Key takeaway:** cert creation is fast for any composition (<400 μs). Cert verification is the bottleneck when NPV winners are numerous — a full NPV cert (94 winners) takes ~9–10 ms to verify due to the linearized MSM. A design that favours PV over NPV significantly reduces verification time.
 
 **Certificate size**
 
@@ -199,16 +198,16 @@ Serialised certificate size depends only on the number of NPV winners, not on th
 
 | Sweep | pv | npv winners | size (bytes) |
 |---|---|---|---|
-| pv-sweep | 1–482 | 0 | 162 |
+| pv-sweep | 1–481 | 0 | 162 |
 | npv-sweep | 1 | 0 | 162 |
-| npv-sweep | 1 | 8 | 802 |
-| npv-sweep | 1 | 21 | 1 842 |
-| npv-sweep | 1 | 42 | 3 523 |
-| npv-sweep | 1 | 63 | 5 203 |
-| npv-sweep | 1 | 84 | 6 883 |
-| diagonal | 1 | 84 | 6 883 |
-| diagonal | 48 | 76 | 6 243 |
-| diagonal | 120 | 63 | 5 203 |
-| diagonal | 241 | 42 | 3 523 |
-| diagonal | 362 | 21 | 1 842 |
-| diagonal | 482 | 0 | 162 |
+| npv-sweep | 1 | 9 | 882 |
+| npv-sweep | 1 | 24 | 2 082 |
+| npv-sweep | 1 | 47 | 3 922 |
+| npv-sweep | 1 | 70 | 5 762 |
+| npv-sweep | 1 | 94 | 7 682 |
+| diagonal | 1 | 94 | 7 682 |
+| diagonal | 48 | 85 | 6 962 |
+| diagonal | 120 | 70 | 5 762 |
+| diagonal | 240 | 47 | 3 922 |
+| diagonal | 361 | 24 | 2 082 |
+| diagonal | 481 | 0 | 162 |

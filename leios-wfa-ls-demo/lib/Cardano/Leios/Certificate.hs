@@ -17,7 +17,12 @@ module Cardano.Leios.Certificate (
 import Cardano.Api (serialiseToRawBytes)
 import Cardano.Binary (FromCBOR (..), ToCBOR (..))
 import Cardano.Crypto.DSIGN (DSIGNAggregatable (..), DSIGNAlgorithm (..))
-import Cardano.Crypto.DSIGN.BLS12381 (BLS12381MinSigDSIGN)
+import Cardano.Crypto.DSIGN.BLS12381 (
+  BLS12381MinSigDSIGN,
+  SigDSIGN (SigBLS12381),
+  VerKeyDSIGN (VerKeyBLS12381),
+ )
+import Cardano.Crypto.EllipticCurve.BLS12_381 (Curve1, Curve2, Point, blsIsInf, blsMSM)
 import Cardano.Crypto.Util (writeBinaryWord64)
 import Cardano.Leios.BitMapPV (BitMapPV, bitmapFromIndexes, getAllFlippedIndexes)
 import Cardano.Leios.Crypto (
@@ -27,6 +32,7 @@ import Cardano.Leios.Crypto (
   PublicKeyLeios (..),
   SignatureLeios (..),
   Vote,
+  getOutputVRFNatural,
  )
 import Cardano.Leios.Types (ElectionId, EndorserBlockHash, PoolId, Weight)
 import Cardano.Leios.Vote (
@@ -80,27 +86,23 @@ data Certificate = Certificate
   deriving (Eq, Show)
 
 --------------------------------------------------------------------------------
--- BLS Signature Aggregation Helpers
+-- BLS Linearization Helpers
 --------------------------------------------------------------------------------
 
--- | Aggregate a list of Vote signatures into a single aggregated signature
-aggregateVotes :: [Vote] -> Either String Vote
-aggregateVotes [] = Left "aggregateVotes: cannot aggregate empty list of votes"
-aggregateVotes votes =
-  let unwrappedSigs = map (\(SignatureLeios sig) -> sig) votes
-   in case aggregateSigsDSIGN @BLS12381MinSigDSIGN unwrappedSigs of
-        Left err -> Left $ "aggregateVotes: " ++ err
-        Right aggrSig -> Right (SignatureLeios aggrSig)
+-- | Linearization scalar for an NPV voter: h_i = H(vrfOutput_i) as Integer.
+-- Uses the same hash as getOutputVRFNatural (Blake2b-256 of serialised BLS sig).
+npvLinearScalar :: OutputVRF -> Integer
+npvLinearScalar = fromIntegral . getOutputVRFNatural
 
--- | Aggregate a list of OutputVRF signatures into a single aggregated signature
--- OutputVRF and Vote are both BLS signatures, so we can use the same aggregation
-aggregateOutputVRFs :: [OutputVRF] -> Either String OutputVRF
-aggregateOutputVRFs [] = Left "aggregateOutputVRFs: cannot aggregate empty list"
-aggregateOutputVRFs vrfOutputs =
-  let unwrappedSigs = map (\(SignatureLeios sig) -> sig) vrfOutputs
-   in case aggregateSigsDSIGN @BLS12381MinSigDSIGN unwrappedSigs of
-        Left err -> Left $ "aggregateOutputVRFs: " ++ err
-        Right aggrSig -> Right (SignatureLeios aggrSig)
+-- | Extract the G1 point from a SignatureLeios.
+-- BLS12381MinSigDSIGN signatures live on Curve1 (the "small" curve).
+sigToG1 :: SignatureLeios r -> Point Curve1
+sigToG1 (SignatureLeios (SigBLS12381 p)) = p
+
+-- | Extract the G2 point from a BLS12381MinSigDSIGN verification key.
+-- Verification keys live on Curve2 (the "large" curve).
+vkToG2 :: VerKeyDSIGN BLS12381MinSigDSIGN -> Point Curve2
+vkToG2 (VerKeyBLS12381 p) = p
 
 -- | Create a certificate from a list of Leios votes
 -- All votes must be for the specified election ID and endorser block hash
@@ -143,9 +145,13 @@ createCertificate eId ebHash committee votes
           -- Build map from pool ID to eligibility signature
           let npvMap = Map.fromList $ map (\npv -> (npvPoolId npv, npvEligibilitySignature npv)) npvs
 
-          -- Aggregate all vote signatures (both PV and NPV)
-          let allSigs = map pvVoteSignature pvs ++ map npvVoteSignature npvs
-          aggrSig <- aggregateVotes allSigs
+          -- Aggregate all vote signatures with a plain sum (scalar 1 for everyone).
+          let allSigsDSIGN =
+                [s | pv <- pvs, let SignatureLeios s = pvVoteSignature pv]
+                  ++ [s | npv <- npvs, let SignatureLeios s = npvVoteSignature npv]
+          aggrSig <- case aggregateSigsDSIGN @BLS12381MinSigDSIGN allSigsDSIGN of
+            Left err -> Left $ "createCertificate: failed to aggregate vote signatures: " ++ err
+            Right s -> Right (SignatureLeios s :: Vote)
 
           Right $
             Certificate
@@ -193,38 +199,45 @@ verifyCertificate eId ebHash committee Certificate {certElectionId, certEndorser
           -- Get network ID from committee (same for all voters)
           nId = networkId committee
 
-      -- Step 3.5: Aggregate NPV public keys (if any) - will be reused in Steps 4 and 5
-      npvAggrPubKey <- case npvPubKeys of
+      -- Step 3.5: Compute per-NPV linearization scalars, then build the linearized
+      -- NPV public key via MSM: Σ h_i · pk_i.  This binds each pk_i to its vrfOutput_i
+      -- and defeats the VRF-output-swap attack.
+      let npvScalars = map npvLinearScalar npvEligSigs
+      npvLinearizedPubKey <- case npvPubKeys of
         [] -> Right Nothing
-        -- This is not really nice, as this prevents us from swapping the underlying signature scheme
-        -- easily. TODO: properly abstract this away.
-        _ -> case uncheckedAggregateVerKeysDSIGN @BLS12381MinSigDSIGN npvPubKeys of
-          Left err -> Left $ "verifyCertificate: failed to aggregate NPV public keys: " ++ err
-          Right key -> Right (Just key)
+        _ ->
+          let pt = blsMSM (zip npvScalars (map vkToG2 npvPubKeys))
+           in if blsIsInf pt
+                then Left "verifyCertificate: linearized NPV public key is the point at infinity"
+                else Right (Just (VerKeyBLS12381 pt))
 
-      -- Step 4: Aggregate NPV eligibility signatures and verify against aggregate public key
-      -- Only verify if there are NPV voters
-      case npvAggrPubKey of
+      -- Step 4: Build linearized NPV eligibility signature (Σ h_i · eligSig_i) and
+      -- verify it against the linearized public key.  Uses the same scalars h_i as
+      -- Step 3.5 so that a swap of vrfOutput_i breaks both the key and sig sides.
+      case npvLinearizedPubKey of
         Nothing -> Right () -- No NPV voters, skip verification
         Just aggrKey -> do
-          -- Aggregate the eligibility signatures stored in the certificate
-          npvAggrSig <- aggregateOutputVRFs npvEligSigs
-
-          -- Verify NPV aggregate eligibility signature against Nonce || eId
-          -- Note: VRF outputs use the 'VRF role, not 'Vote role
-          let nonce = praosNonce committee
-              (SignatureLeios npvAggrSigRaw) = npvAggrSig
-
+          let linearEligPt = blsMSM (zip npvScalars (map sigToG1 npvEligSigs))
+              npvLinearSigRaw = SigBLS12381 linearEligPt
+              nonce = praosNonce committee
           case verifyDSIGN
             (blsCtx (Proxy @'VRF) nId)
             aggrKey
             (serialiseToRawBytes nonce <> writeBinaryWord64 eId)
-            npvAggrSigRaw of
-            Left err -> Left $ "verifyCertificate: NPV aggregate eligibility signature verification failed: " ++ err
+            npvLinearSigRaw of
+            Left err -> Left $ "verifyCertificate: linearized NPV eligibility verification failed: " ++ err
             Right () -> Right ()
 
-      -- Step 5: Combine NPV aggregate key with all PV keys and verify aggregate vote signature
-      let allPubKeys = case npvAggrPubKey of
+      -- Step 5: Aggregate NPV keys with a plain sum and combine with PV keys to verify
+      -- the aggregate vote signature.  Vote aggregation uses scalar 1 for all voters,
+      -- so simple (unweighted) key summation is correct here.
+      npvSimpleAggrKey <- case npvPubKeys of
+        [] -> Right Nothing
+        _ -> case uncheckedAggregateVerKeysDSIGN @BLS12381MinSigDSIGN npvPubKeys of
+          Left err -> Left $ "verifyCertificate: failed to aggregate NPV public keys: " ++ err
+          Right key -> Right (Just key)
+
+      let allPubKeys = case npvSimpleAggrKey of
             Nothing -> pvPubKeys
             Just aggrKey -> aggrKey : pvPubKeys
 

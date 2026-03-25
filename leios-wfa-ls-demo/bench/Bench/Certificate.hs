@@ -6,9 +6,10 @@ module Bench.Certificate (benchmarks) where
 import Bench.Utils (BenchEnv (..), randomBenchInputs)
 import Cardano.Api (NetworkId (..), NetworkMagic (..))
 import Cardano.Binary (ToCBOR (toCBOR))
-import Cardano.Leios.Certificate (createCertificate, verifyCertificate)
+import Cardano.Crypto.DSIGN.BLS12381 (SigDSIGN (SigBLS12381))
+import Cardano.Leios.Certificate (Certificate (..), createCertificate, verifyCertificate)
 import Cardano.Leios.Committee (OrderedSetOfParties (..), Party (..), mkOrderedSetOfParties)
-import Cardano.Leios.Crypto (KeyRoleLeios (..), PrivateKeyLeios (..))
+import Cardano.Leios.Crypto (KeyRoleLeios (..), PrivateKeyLeios (..), SignatureLeios (..))
 import Cardano.Leios.Types (ElectionId, EndorserBlockHash)
 import Cardano.Leios.Utils (createParties, toSkForBLS)
 import Cardano.Leios.Vote (
@@ -24,8 +25,7 @@ import Cardano.Leios.WeightedFaitAccompli (
 import Cardano.Query (mkLocalNodeConnInfo, queryPoolDistrMap, renderQueryError)
 import Codec.CBOR.Write (toStrictByteString)
 import Control.Exception (evaluate)
-import Control.Monad (void)
-import Criterion.Main (Benchmark, bench, bgroup, perRunEnv)
+import Criterion.Main (Benchmark, bench, bgroup, env, whnfIO)
 import qualified Data.ByteString as BS
 import qualified Data.Map.Strict as Map
 import System.Environment (lookupEnv)
@@ -58,6 +58,7 @@ buildVotes committee pvPrivKeys npvPrivKeys eId ebHash pvCount npvCount =
       ]
 
 -- | A single named range benchmark group with create + verify benches.
+-- Setup (vote creation, sortition) runs once; only createCertificate / verifyCertificate is timed.
 rangeBench ::
   CommitteeSelection ->
   [PrivateKeyLeios 'Vote] ->
@@ -67,33 +68,34 @@ rangeBench ::
   Int ->
   Benchmark
 rangeBench committee pvPrivKeys npvPrivKeys label pvCount npvCount =
-  bgroup
-    label
-    [ bench "create" $
-        perRunEnv
-          ( do
-              (_, eId, ebHash) <- randomBenchInputs
-              let votes = buildVotes committee pvPrivKeys npvPrivKeys eId ebHash pvCount npvCount
-              return $! BenchEnv (eId, ebHash, votes)
-          )
-          ( \(BenchEnv (eId, ebHash, votes)) ->
-              case createCertificate eId ebHash committee votes of
-                Left err -> error $ "cert create bench: " ++ err
-                Right cert -> void (evaluate cert)
-          )
-    , bench "verify" $
-        perRunEnv
-          ( do
-              (_, eId, ebHash) <- randomBenchInputs
-              let votes = buildVotes committee pvPrivKeys npvPrivKeys eId ebHash pvCount npvCount
-              case createCertificate eId ebHash committee votes of
-                Left err -> error $ "cert verify setup: " ++ err
-                Right cert -> return $! BenchEnv (eId, ebHash, cert)
-          )
-          ( \(BenchEnv (eId, ebHash, cert)) ->
-              void . evaluate $ verifyCertificate eId ebHash committee cert
-          )
-    ]
+  env
+    ( do
+        (_, eId, ebHash) <- randomBenchInputs
+        -- Build votes once (expensive for NPV: tries all keys under sortition).
+        -- createCertificate also forces all lazy vote-signature thunks so they are
+        -- memoised for every subsequent benchmark iteration.
+        let votes = buildVotes committee pvPrivKeys npvPrivKeys eId ebHash pvCount npvCount
+        cert <- case createCertificate eId ebHash committee votes of
+          Left err -> error $ "rangeBench setup: " ++ err
+          Right c -> return c
+        return $! BenchEnv (eId, ebHash, votes, cert)
+    )
+    ( \e ->
+        let BenchEnv (eId, ebHash, votes, cert) = e
+         in bgroup
+              label
+              [ bench "create" $
+                  whnfIO $
+                    case createCertificate eId ebHash committee votes of
+                      Left err -> error $ "cert create bench: " ++ err
+                      Right cert' -> case aggrVote cert' of
+                        SignatureLeios (SigBLS12381 pt) -> evaluate pt
+              , bench "verify" $
+                  whnfIO $
+                    evaluate $
+                      verifyCertificate eId ebHash committee cert
+              ]
+    )
 
 -- | Map a fraction to a count, returning 0 verbatim for 0 fractions
 -- and clamping to at least 1 otherwise.

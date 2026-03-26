@@ -274,7 +274,7 @@ verifyCertificate eId ebHash committee Certificate {certElectionId, certEndorser
         Just voter -> Right voter
 
     -- Helper to unwrap PublicKeyLeios to get the raw BLS verification key
-    unwrapPublicKey :: PublicKeyLeios 'Vote -> VerKeyDSIGN BLS12381MinSigDSIGN
+    unwrapPublicKey :: PublicKeyLeios -> VerKeyDSIGN BLS12381MinSigDSIGN
     unwrapPublicKey (PublicKeyLeios (_, vk)) = vk
 
 --------------------------------------------------------------------------------

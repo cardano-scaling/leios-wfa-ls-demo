@@ -1,4 +1,3 @@
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Cardano.Leios.Utils where
@@ -9,7 +8,7 @@ import Cardano.Crypto.DSIGN
 import Cardano.Crypto.Seed (mkSeedFromBytes)
 import Cardano.Ledger.Hashes (KeyHash (..))
 import Cardano.Leios.Committee (Party (..), PoolId)
-import Cardano.Leios.Crypto (KeyRoleLeios (..), PublicKeyLeios (..))
+import Cardano.Leios.Crypto (PublicKeyLeios (..))
 import qualified Data.ByteString as BS
 import Data.Data (Proxy (..))
 
@@ -30,7 +29,7 @@ toSeedForBLS = mkSeedFromBytes . toFixedLen seedLen . hashToBytes . unKeyHash
 toSkForBLS :: PoolId -> SignKeyDSIGN BLS12381MinSigDSIGN
 toSkForBLS = genKeyDSIGN @BLS12381MinSigDSIGN . toSeedForBLS
 
-toVerKeyForBLS :: PoolId -> NetworkId -> PublicKeyLeios 'Vote
+toVerKeyForBLS :: PoolId -> NetworkId -> PublicKeyLeios
 toVerKeyForBLS pId nId = PublicKeyLeios (nId, (deriveVerKeyDSIGN @BLS12381MinSigDSIGN . toSkForBLS) pId)
 
 createParties :: NetworkId -> [(PoolId, Rational)] -> [Party]

@@ -1,4 +1,3 @@
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Cardano.Leios.WeightedFaitAccompli (
@@ -125,7 +124,7 @@ type PersistentVoterIndex = Word16
 -- | A type representing a persistent voter seat. The goal of fait accompli
 -- is to assign more weight to large stake pools
 data PersistentSeat = PersistentSeat
-  { publicVoteKeyPersistent :: PublicKeyLeios 'Vote
+  { publicVoteKeyPersistent :: PublicKeyLeios
   , weightPersistentSeat :: Weight
   }
   deriving (Show)
@@ -133,14 +132,14 @@ data PersistentSeat = PersistentSeat
 type PersistentSeats = Map.Map PersistentVoterIndex PersistentSeat
 
 findPersistentSeatByPublicKey ::
-  PublicKeyLeios 'Vote ->
+  PublicKeyLeios ->
   PersistentSeats ->
   Maybe (PersistentVoterIndex, PersistentSeat)
 findPersistentSeatByPublicKey pk =
   find (\(_, v) -> publicVoteKeyPersistent v == pk) . Map.toList
 
 data NonPersistentVoter = NonPersistentVoter
-  { publicVoteKeyNonPersistent :: PublicKeyLeios 'Vote
+  { publicVoteKeyNonPersistent :: PublicKeyLeios
   , -- This is stake w.r.t the total of non-persistent stake
     stakeNonPersistentVoter :: RelativeStake
   }
@@ -149,7 +148,7 @@ data NonPersistentVoter = NonPersistentVoter
 type NonPersistentVoters = Map.Map PoolId NonPersistentVoter
 
 findNonPersistentVoterByPublicKey ::
-  PublicKeyLeios 'Vote ->
+  PublicKeyLeios ->
   NonPersistentVoters ->
   Maybe (PoolId, NonPersistentVoter)
 findNonPersistentVoterByPublicKey pk =

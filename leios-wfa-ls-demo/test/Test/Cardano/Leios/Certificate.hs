@@ -1,4 +1,3 @@
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Test.Cardano.Leios.Certificate (tests) where
@@ -17,7 +16,6 @@ import Cardano.Leios.Committee (
   Party (..),
  )
 import Cardano.Leios.Crypto (
-  KeyRoleLeios (..),
   PrivateKeyLeios (..),
  )
 import Cardano.Leios.Types (
@@ -413,7 +411,7 @@ testCertificateCBORRoundtrip cert = do
         else Left "Decoded certificate does not match original"
 
 -- | Create a private key for a given pool ID using the same test key derivation
-makePrivateKey :: PoolId -> PrivateKeyLeios 'Vote
+makePrivateKey :: PoolId -> PrivateKeyLeios
 makePrivateKey pId = PrivateKeyLeios (testNetworkId, toSkForBLS pId)
 
 -- | Test network ID for generating keys

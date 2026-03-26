@@ -1,4 +1,3 @@
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -16,10 +15,8 @@ import Cardano.Leios.Committee (
   mkOrderedSetOfParties,
  )
 import Cardano.Leios.Crypto (
-  KeyRoleLeios (..),
   OutputVRF,
   PrivateKeyLeios (..),
-  coercePrivateKeyLeios,
   signWithRoleLeios,
  )
 import Cardano.Leios.LocalSortition (checkLeaderValueLeios)
@@ -199,7 +196,7 @@ runSimulation nId osp numRounds = do
 
 generateVRFOutputForRound :: PoolId -> NetworkId -> Int -> OutputVRF
 generateVRFOutputForRound pId nId roundNum =
-  let vrfKey = coercePrivateKeyLeios @'Vote @'VRF (PrivateKeyLeios (nId, toSkForBLS pId))
+  let vrfKey = PrivateKeyLeios (nId, toSkForBLS pId)
       msg = BSC.pack $ "local-sortition-round-" ++ show roundNum
    in signWithRoleLeios msg vrfKey
 

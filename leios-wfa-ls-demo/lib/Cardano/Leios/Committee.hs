@@ -1,4 +1,3 @@
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Cardano.Leios.Committee (
@@ -34,7 +33,7 @@ data Party = Party
   -- ^ The `poolId` is not strictly needed in this type
   --   keeping it for now as the BLS key will be derived from it
   --   in tests
-  , publicVoteKey :: PublicKeyLeios 'Vote
+  , publicVoteKey :: PublicKeyLeios
   , stake :: Rational
   }
   deriving (Show)

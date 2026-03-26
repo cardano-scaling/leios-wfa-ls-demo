@@ -1,4 +1,3 @@
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -10,10 +9,8 @@ import Cardano.Api (NetworkId (..), NetworkMagic (..))
 import Cardano.Api.Shelley (makePraosNonce)
 import Cardano.Leios.Committee
 import Cardano.Leios.Crypto (
-  KeyRoleLeios (..),
   OutputVRF,
   PrivateKeyLeios (..),
-  coercePrivateKeyLeios,
   signWithRoleLeios,
  )
 import Cardano.Leios.LocalSortition (checkLeaderValueLeios)
@@ -111,7 +108,7 @@ checkVoterSortition n2 pId voter =
 generateVRFOutput :: PoolId -> NetworkId -> OutputVRF
 generateVRFOutput pId nId =
   let sk = toSkForBLS pId
-      vrfKey = coercePrivateKeyLeios @'Vote @'VRF (PrivateKeyLeios (nId, sk))
+      vrfKey = PrivateKeyLeios (nId, sk)
       -- Use a simple message for testing
       msg :: ByteString
       msg = "local-sortition-test"

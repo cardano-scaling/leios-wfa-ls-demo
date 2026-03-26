@@ -1,5 +1,3 @@
-{-# LANGUAGE DataKinds #-}
-
 module Bench.PersistentVote (benchmarks) where
 
 import Bench.Utils (
@@ -9,7 +7,7 @@ import Bench.Utils (
   mkPrivKey,
   randomBenchInputs,
  )
-import Cardano.Leios.Crypto (KeyRoleLeios (..), PrivateKeyLeios)
+import Cardano.Leios.Crypto (PrivateKeyLeios)
 import Cardano.Leios.Vote (
   LeiosVote (..),
   PersistentVote (..),
@@ -22,7 +20,7 @@ import Control.Exception (evaluate)
 import Control.Monad (void)
 import Criterion.Main (Benchmark, bench, bgroup, env, perRunEnv)
 
-data PVSetup = PVSetup CommitteeSelection (PrivateKeyLeios 'Vote)
+data PVSetup = PVSetup CommitteeSelection PrivateKeyLeios
 
 instance NFData PVSetup where
   rnf x = x `seq` ()

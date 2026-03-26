@@ -1,5 +1,4 @@
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
@@ -12,13 +11,10 @@ import Cardano.Crypto.DSIGN (DSIGNAlgorithm (deriveVerKeyDSIGN))
 import Cardano.Crypto.Util (writeBinaryWord64)
 import Cardano.Leios.Committee (NonPersistentSeats)
 import Cardano.Leios.Crypto (
-  KeyRoleLeios (..),
   OutputVRF,
   PrivateKeyLeios (..),
   PublicKeyLeios (PublicKeyLeios),
   Vote,
-  coercePrivateKeyLeios,
-  coercePublicKeyLeios,
   signWithRoleLeios,
   verifyWithRoleLeios,
  )
@@ -113,7 +109,7 @@ verifyNonPersistentVote CommitteeSelection {nonPersistentVoters, nonPersistentSe
           vrfOutput = npvEligibilitySignature vote
       verifyWithRoleLeios pkVote ebHash (npvVoteSignature vote)
       verifyWithRoleLeios
-        (coercePublicKeyLeios pkVote)
+        pkVote
         (serialiseToRawBytes nonce <> writeBinaryWord64 eId)
         vrfOutput
       -- Check if the voter won at least one seat via local sortition
@@ -149,7 +145,7 @@ checkNonPersistentVoteEligibility CommitteeSelection {nonPersistentVoters, nonPe
 
 createPersistentVote ::
   CommitteeSelection ->
-  PrivateKeyLeios 'Vote ->
+  PrivateKeyLeios ->
   ElectionId ->
   EndorserBlockHash ->
   Either String PersistentVote
@@ -164,12 +160,12 @@ createPersistentVote committee privKey@(PrivateKeyLeios (nId, sk)) eId ebHash = 
         , pvVoteSignature = signWithRoleLeios ebHash privKey
         }
   where
-    pk = PublicKeyLeios (nId, deriveVerKeyDSIGN sk) :: PublicKeyLeios 'Vote
+    pk = PublicKeyLeios (nId, deriveVerKeyDSIGN sk)
 
 createNonPersistentVote ::
   PraosNonce ->
   CommitteeSelection ->
-  PrivateKeyLeios 'Vote ->
+  PrivateKeyLeios ->
   ElectionId ->
   EndorserBlockHash ->
   Either String NonPersistentVote
@@ -180,7 +176,7 @@ createNonPersistentVote nonce CommitteeSelection {nonPersistentVoters, nonPersis
         outputVRF =
           signWithRoleLeios
             (serialiseToRawBytes nonce <> writeBinaryWord64 eId)
-            (coercePrivateKeyLeios privKey)
+            privKey
      in case checkLeaderValueLeios
           outputVRF
           npvRelativeStake
@@ -199,7 +195,7 @@ createNonPersistentVote nonce CommitteeSelection {nonPersistentVoters, nonPersis
             | otherwise -> Left "createNonPersistentVote: voter did not win any seats in local sortition"
   where
     vtrs = voters nonPersistentVoters
-    pk = PublicKeyLeios (nId, deriveVerKeyDSIGN sk) :: PublicKeyLeios 'Vote
+    pk = PublicKeyLeios (nId, deriveVerKeyDSIGN sk)
 
 --------------------------------------------------------------------------------
 -- CBOR Serialization

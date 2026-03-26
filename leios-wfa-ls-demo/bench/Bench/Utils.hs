@@ -1,6 +1,3 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeApplications #-}
-
 module Bench.Utils (
   BenchEnv (..),
   testNetworkId,
@@ -22,7 +19,7 @@ import Cardano.Api.Shelley (makePraosNonce)
 import Cardano.Crypto.DSIGN (DSIGNAlgorithm (deriveVerKeyDSIGN))
 import qualified Cardano.Crypto.Hash as Hash
 import Cardano.Ledger.Hashes (KeyHash (..))
-import Cardano.Leios.Crypto (KeyRoleLeios (..), PrivateKeyLeios (..), PublicKeyLeios (..))
+import Cardano.Leios.Crypto (PrivateKeyLeios (..), PublicKeyLeios (..))
 import Cardano.Leios.Types (ElectionId, EndorserBlockHash, PoolId)
 import Cardano.Leios.Utils (toSkForBLS, toVerKeyForBLS)
 import Cardano.Leios.Vote (NonPersistentVote, createNonPersistentVote)
@@ -63,15 +60,15 @@ testNonce = makePraosNonce $ BSC.pack "test-nonce"
 mkPoolId :: Int -> PoolId
 mkPoolId idx = KeyHash $ Hash.castHash $ Hash.hashWith id $ BSC.pack (show idx)
 
-mkPrivKey :: PoolId -> PrivateKeyLeios 'Vote
+mkPrivKey :: PoolId -> PrivateKeyLeios
 mkPrivKey pId = PrivateKeyLeios (testNetworkId, toSkForBLS pId)
 
-mkPubKey :: PoolId -> PublicKeyLeios 'Vote
+mkPubKey :: PoolId -> PublicKeyLeios
 mkPubKey pId = toVerKeyForBLS pId testNetworkId
 
 -- | Build a CommitteeSelection with exactly one persistent seat for the given key.
 -- Bypasses wFA so we control the seat directly.
-mkPVCommittee :: PrivateKeyLeios 'Vote -> CommitteeSelection
+mkPVCommittee :: PrivateKeyLeios -> CommitteeSelection
 mkPVCommittee (PrivateKeyLeios (nId, sk)) =
   CommitteeSelection
     { persistentSeats =
@@ -97,7 +94,7 @@ mkPVCommittee (PrivateKeyLeios (nId, sk)) =
 
 -- | Build a CommitteeSelection with exactly one NPV voter with normalised stake σ and n2 seats.
 -- Bypasses wFA so we control n2 and σ directly.
-mkNPVCommittee :: Rational -> Word16 -> PoolId -> PublicKeyLeios 'Vote -> CommitteeSelection
+mkNPVCommittee :: Rational -> Word16 -> PoolId -> PublicKeyLeios -> CommitteeSelection
 mkNPVCommittee sigma n2 pId pubKey =
   CommitteeSelection
     { persistentSeats = Map.empty
@@ -141,7 +138,7 @@ randomBenchInputs = do
 -- | Scan random inputs until createNonPersistentVote returns Right (pool wins ≥1 seat).
 findWinningInput ::
   CommitteeSelection ->
-  PrivateKeyLeios 'Vote ->
+  PrivateKeyLeios ->
   IO (PraosNonce, ElectionId, EndorserBlockHash, NonPersistentVote)
 findWinningInput cs privKey = go
   where
@@ -155,7 +152,7 @@ findWinningInput cs privKey = go
 -- Only call for (σ, n2) where λ = σ×n2 < 5 (see feasibleForLose).
 findLosingInput ::
   CommitteeSelection ->
-  PrivateKeyLeios 'Vote ->
+  PrivateKeyLeios ->
   IO (PraosNonce, ElectionId, EndorserBlockHash)
 findLosingInput cs privKey = go
   where

@@ -1,6 +1,3 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeApplications #-}
-
 module Bench.Certificate (benchmarks) where
 
 import Bench.Utils (BenchEnv (..), randomBenchInputs)
@@ -9,7 +6,7 @@ import Cardano.Binary (ToCBOR (toCBOR))
 import Cardano.Crypto.DSIGN.BLS12381 (SigDSIGN (SigBLS12381))
 import Cardano.Leios.Certificate (Certificate (..), createCertificate, verifyCertificate)
 import Cardano.Leios.Committee (OrderedSetOfParties (..), Party (..), mkOrderedSetOfParties)
-import Cardano.Leios.Crypto (KeyRoleLeios (..), PrivateKeyLeios (..), SignatureLeios (..))
+import Cardano.Leios.Crypto (PrivateKeyLeios (..), SignatureLeios (..))
 import Cardano.Leios.Types (ElectionId, EndorserBlockHash)
 import Cardano.Leios.Utils (createParties, toSkForBLS)
 import Cardano.Leios.Vote (
@@ -35,8 +32,8 @@ import System.Environment (lookupEnv)
 -- npvCount NPV votes by trying all npvPrivKeys under sortition.
 buildVotes ::
   CommitteeSelection ->
-  [PrivateKeyLeios 'Vote] ->
-  [PrivateKeyLeios 'Vote] ->
+  [PrivateKeyLeios] ->
+  [PrivateKeyLeios] ->
   ElectionId ->
   EndorserBlockHash ->
   Int ->
@@ -61,8 +58,8 @@ buildVotes committee pvPrivKeys npvPrivKeys eId ebHash pvCount npvCount =
 -- Setup (vote creation, sortition) runs once; only createCertificate / verifyCertificate is timed.
 rangeBench ::
   CommitteeSelection ->
-  [PrivateKeyLeios 'Vote] ->
-  [PrivateKeyLeios 'Vote] ->
+  [PrivateKeyLeios] ->
+  [PrivateKeyLeios] ->
   String ->
   Int ->
   Int ->

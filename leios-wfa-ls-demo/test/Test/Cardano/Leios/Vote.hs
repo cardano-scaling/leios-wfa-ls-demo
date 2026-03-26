@@ -1,4 +1,3 @@
-{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Test.Cardano.Leios.Vote (tests) where
@@ -12,7 +11,6 @@ import Cardano.Leios.Committee (
   Party (..),
  )
 import Cardano.Leios.Crypto (
-  KeyRoleLeios (..),
   PrivateKeyLeios (..),
  )
 import Cardano.Leios.Types (
@@ -194,7 +192,7 @@ testNonPersistentVoter nonce committee eId ebHash pId _voter =
             Right _weight -> Right ()
 
 -- | Create a private key for a given pool ID using the same test key derivation
-makePrivateKey :: PoolId -> PrivateKeyLeios 'Vote
+makePrivateKey :: PoolId -> PrivateKeyLeios
 makePrivateKey pId = PrivateKeyLeios (testNetworkId, toSkForBLS pId)
 
 -- | Test network ID for generating keys

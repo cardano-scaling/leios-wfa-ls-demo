@@ -21,8 +21,6 @@ module Cardano.Leios.Crypto (
   SignatureLeios (..),
   verifyPossessionProofLeios,
   createPossessionProofLeios,
-  coercePrivateKeyLeios,
-  coercePublicKeyLeios,
   HasBLSContext (..),
   outputNatMax,
   getOutputVRFNatural,
@@ -42,7 +40,6 @@ import Cardano.Leios.Types
 import qualified Codec.CBOR.Decoding as D
 import qualified Codec.CBOR.Encoding as E
 import Data.ByteString
-import Data.Coerce (coerce)
 import Data.Data (Proxy (..))
 import Data.Typeable (Typeable)
 import Numeric.Natural (Natural)
@@ -60,12 +57,12 @@ import Numeric.Natural (Natural)
 data KeyRoleLeios = Vote | VRF | PoP
 
 -- | The private key of a Leios key pair and the network id it is used on
-newtype PrivateKeyLeios (r :: KeyRoleLeios)
+newtype PrivateKeyLeios
   = PrivateKeyLeios (NetworkId, SignKeyDSIGN BLS12381MinSigDSIGN)
   deriving newtype (Eq, Show)
 
 -- | The public key of a Leios key pair and the network id it is used on
-newtype PublicKeyLeios (r :: KeyRoleLeios)
+newtype PublicKeyLeios
   = PublicKeyLeios (NetworkId, VerKeyDSIGN BLS12381MinSigDSIGN)
   deriving newtype (Eq, Show)
 
@@ -92,12 +89,6 @@ outputNatMax =
 
 -- | The proof of possession of any `PublicVoteKeyLeios r`
 type PublicKeyPossessionProofLeios = PossessionProofDSIGN BLS12381MinSigDSIGN
-
-coercePrivateKeyLeios :: PrivateKeyLeios r1 -> PrivateKeyLeios r2
-coercePrivateKeyLeios = coerce
-
-coercePublicKeyLeios :: PublicKeyLeios r1 -> PublicKeyLeios r2
-coercePublicKeyLeios = coerce
 
 -- Basic over G1: https://www.ietf.org/archive/id/draft-irtf-cfrg-bls-signature-06.html#section-4.2.1-1
 minSigSignatureDST :: BLS12381SignContext
@@ -130,7 +121,7 @@ signWithRoleLeios ::
   ( HasBLSContext r
   , SignableRepresentation msg
   ) =>
-  msg -> PrivateKeyLeios r -> SignatureLeios r
+  msg -> PrivateKeyLeios -> SignatureLeios r
 signWithRoleLeios msg (PrivateKeyLeios (nId, sk)) =
   SignatureLeios (signDSIGN (blsCtx (Proxy @r) nId) msg sk)
 
@@ -139,20 +130,20 @@ verifyWithRoleLeios ::
   ( HasBLSContext r
   , SignableRepresentation msg
   ) =>
-  PublicKeyLeios r -> msg -> SignatureLeios r -> Either String ()
+  PublicKeyLeios -> msg -> SignatureLeios r -> Either String ()
 verifyWithRoleLeios (PublicKeyLeios (nId, vk)) msg (SignatureLeios sig) =
   verifyDSIGN (blsCtx (Proxy @r) nId) vk msg sig
 
 -- | Create a Proof of Possession for a pool with `PoolId` and a given `PrivateKeyLeios 'PoP`
 -- The binding to the pool id ensures that others cannot replay this PoP in their registration.
-createPossessionProofLeios :: PrivateKeyLeios 'PoP -> PoolId -> PublicKeyPossessionProofLeios
+createPossessionProofLeios :: PrivateKeyLeios -> PoolId -> PublicKeyPossessionProofLeios
 createPossessionProofLeios (PrivateKeyLeios (nId, sk)) pId = createPossessionProofDSIGN ctx' sk
   where
     ctx = blsCtx (Proxy @'PoP) nId
     ctx' = ctx {blsSignContextAug = blsSignContextAug ctx <> Just ((hashToBytes . unKeyHash) pId)}
 
 verifyPossessionProofLeios ::
-  PublicKeyLeios 'PoP -> PoolId -> PublicKeyPossessionProofLeios -> Either String ()
+  PublicKeyLeios -> PoolId -> PublicKeyPossessionProofLeios -> Either String ()
 verifyPossessionProofLeios (PublicKeyLeios (nId, vk)) pId = verifyPossessionProofDSIGN ctx' vk
   where
     ctx = blsCtx (Proxy @'PoP) nId

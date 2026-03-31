@@ -12,6 +12,8 @@ module Bench.Utils (
   findWinningInput,
   findLosingInput,
   feasibleForLose,
+  generateParetoStakeDist,
+  generateLinearStakeDist,
 ) where
 
 import Cardano.Api (NetworkId (..), NetworkMagic (..), PraosNonce)
@@ -30,6 +32,7 @@ import Cardano.Leios.WeightedFaitAccompli (
   PersistentSeat (..),
  )
 import Control.DeepSeq (NFData (..))
+import Control.Monad (replicateM)
 import Data.Bits (shiftL, (.|.))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
@@ -165,3 +168,43 @@ findLosingInput cs privKey = go
 -- | Only emit the create-lose bench when λ = σ×n2 < 5 (P(lose) > 0.7%).
 feasibleForLose :: Rational -> Word16 -> Bool
 feasibleForLose sigma n2 = sigma * fromIntegral n2 < 5
+
+-- | Generate a synthetic stake distribution of @n@ pools drawn from a
+-- Pareto(α, x_m=1) distribution and normalised to sum to exactly 1.
+--
+-- Uses the inverse-CDF transform: given U ~ Uniform(0,1),
+--   X = 1 / (1 - U)^(1/α)
+-- Smaller α → fatter tail → stake more concentrated in top pools.
+-- Larger α → tail decays faster → distribution closer to uniform.
+-- Pool ids are deterministic: 'mkPoolId' 0 .. n-1.
+generateParetoStakeDist :: Double -> Int -> IO (Map.Map PoolId Rational)
+generateParetoStakeDist alpha n = do
+  us <- replicateM n randomUnit
+  let xs = map (paretoSample alpha) us
+      xsR = map toRational xs
+      total = sum xsR
+      stakes = map (/ total) xsR
+  return $ Map.fromList (zip (map mkPoolId [0 .. n - 1]) stakes)
+  where
+    -- Draw one double uniformly in (0, 1) via /dev/urandom.
+    -- We mask to 53 significant bits to stay within Double precision.
+    randomUnit :: IO Double
+    randomUnit = do
+      bs <- randomBytes 8
+      let w = bytesToWord64 bs
+          mantissa = w `mod` (2 ^ (53 :: Int))
+      return $ fromIntegral mantissa / fromIntegral (2 ^ (53 :: Int) :: Word64)
+    paretoSample :: Double -> Double -> Double
+    paretoSample a u = 1.0 / (1.0 - u) ** (1.0 / a)
+
+-- | Generate a synthetic stake distribution of @n@ pools with linearly
+-- decreasing stake: pool @i@ gets weight @(n - i)@, normalised to sum to 1.
+-- Pool 0 has the highest stake, pool @n-1@ has the lowest.
+generateLinearStakeDist :: Int -> Map.Map PoolId Rational
+generateLinearStakeDist n =
+  Map.fromList
+    [ (mkPoolId i, fromIntegral (n - i) % total)
+    | i <- [0 .. n - 1]
+    ]
+  where
+    total = fromIntegral (n * (n + 1) `div` 2)

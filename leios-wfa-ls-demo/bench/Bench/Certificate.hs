@@ -1,13 +1,21 @@
 module Bench.Certificate (benchmarks) where
 
-import Bench.Utils (BenchEnv (..), randomBenchInputs)
+import Bench.Utils (
+  BenchEnv (..),
+  generateLinearStakeDist,
+  generateParetoStakeDist,
+  mkPoolId,
+  mkPrivKey,
+  randomBenchInputs,
+  testNetworkId,
+ )
 import Cardano.Api (NetworkId (..), NetworkMagic (..))
 import Cardano.Binary (ToCBOR (toCBOR))
 import Cardano.Crypto.DSIGN.BLS12381 (SigDSIGN (SigBLS12381))
 import Cardano.Leios.Certificate (Certificate (..), createCertificate, verifyCertificate)
 import Cardano.Leios.Committee (OrderedSetOfParties (..), Party (..), mkOrderedSetOfParties)
 import Cardano.Leios.Crypto (PrivateKeyLeios (..), SignatureLeios (..))
-import Cardano.Leios.Types (ElectionId, EndorserBlockHash)
+import Cardano.Leios.Types (ElectionId, EndorserBlockHash, PoolId)
 import Cardano.Leios.Utils (createParties, toSkForBLS)
 import Cardano.Leios.Vote (
   LeiosVote (..),
@@ -135,12 +143,84 @@ diagonalRanges numPV numNPVWinners =
       ]
   ]
 
-benchmarks :: IO [Benchmark]
-benchmarks = do
+-- | Build a worst-case bench group for a single synthetic distribution.
+-- Each size n uses a committee where all n parties get persistent seats,
+-- so all n votes go into the certificate.
+-- 'genDist' is called once per size n during setup (not timed).
+mkSyntheticGroup ::
+  String ->
+  (Int -> IO (Map.Map PoolId Rational)) ->
+  [Int] ->
+  IO Benchmark
+mkSyntheticGroup distLabel genDist sizes = do
+  sizebenches <- mapM mkOne sizes
+  return $ bgroup distLabel sizebenches
+  where
+    mkOne n = do
+      distr <- genDist n
+      (nonce, _, _) <- randomBenchInputs
+      let ps = createParties testNetworkId (Map.toList distr)
+          -- committeeSize = n forces all n parties into persistent seats
+          pvPrivKeys = map (mkPrivKey . mkPoolId) [0 .. n - 1]
+      orderedPs <- case mkOrderedSetOfParties (fromIntegral n) ps of
+        Left err -> error $ "mkSyntheticGroup " ++ distLabel ++ " n=" ++ show n ++ ": " ++ show err
+        Right ops -> return ops
+      let committee = wFA testNetworkId nonce orderedPs
+          numPV = Map.size (persistentSeats committee)
+      putStrLn $
+        "cert synthetic/"
+          ++ distLabel
+          ++ "/n="
+          ++ show n
+          ++ ": numPV="
+          ++ show numPV
+      return $ rangeBench committee pvPrivKeys [] ("n=" ++ show n) n 0
+
+-- | Synthetic worst-case benchmarks: Pareto and linear distributions,
+-- across a range of committee sizes. Always runs (no node socket required).
+syntheticBenchmarks :: IO Benchmark
+syntheticBenchmarks = do
+  let sizes = [100, 250, 500, 1000, 1500, 2000, 2500, 3000]
+      alpha = 1.5 :: Double
+  paretoBench <-
+    mkSyntheticGroup
+      ("pareto/alpha=" ++ show alpha)
+      (generateParetoStakeDist alpha)
+      sizes
+  linearBench <-
+    mkSyntheticGroup
+      "linear"
+      (\n -> return (generateLinearStakeDist n))
+      sizes
+  return $ bgroup "synthetic" [paretoBench, linearBench]
+
+-- | Scaling benchmarks for graph generation: Pareto(α=0.5) and linear,
+-- n ∈ [1000..3000]. Run with --match pattern "cert/synthetic/scaling" and
+-- --json to feed into bench/plot_scaling.py.
+scalingBenchmarks :: IO Benchmark
+scalingBenchmarks = do
+  let sizes = [1000, 1500, 2000, 2500, 3000]
+      alpha = 0.5 :: Double
+  paretoBench <-
+    mkSyntheticGroup
+      ("pareto/alpha=" ++ show alpha)
+      (generateParetoStakeDist alpha)
+      sizes
+  linearBench <-
+    mkSyntheticGroup
+      "linear"
+      (\n -> return (generateLinearStakeDist n))
+      sizes
+  return $ bgroup "scaling" [paretoBench, linearBench]
+
+-- | Mainnet benchmarks: requires LEIOS_BENCH_NODE_SOCKET to be set.
+-- Returns an empty list when the socket is unavailable.
+mainnetBenchmarks :: IO [Benchmark]
+mainnetBenchmarks = do
   mSocket <- lookupEnv "LEIOS_BENCH_NODE_SOCKET"
   case mSocket of
     Nothing -> do
-      putStrLn "cert: LEIOS_BENCH_NODE_SOCKET not set; skipping certificate benchmarks"
+      putStrLn "cert: LEIOS_BENCH_NODE_SOCKET not set; skipping mainnet certificate benchmarks"
       return []
     Just socketPath -> do
       mMagicStr <- lookupEnv "LEIOS_BENCH_NETWORK_MAGIC"
@@ -201,10 +281,17 @@ benchmarks = do
                         certSizeStr = case createCertificate sampleEId sampleEbHash committee votes of
                           Left e -> "error: " ++ e
                           Right cert -> show (BS.length (toStrictByteString (toCBOR cert))) ++ " bytes"
-                    putStrLn $ "cert " ++ groupName ++ "/" ++ lbl ++ ": size=" ++ certSizeStr
+                    putStrLn $ "cert mainnet/" ++ groupName ++ "/" ++ lbl ++ ": size=" ++ certSizeStr
                     return $ rangeBench committee pvPrivKeys npvPrivKeys lbl pvc npvc
 
               pvBench <- buildGroup "pv-sweep" (pvSweepRanges numPV)
               npvBench <- buildGroup "npv-sweep" (npvSweepRanges numNPVWinners)
               diagBench <- buildGroup "diagonal" (diagonalRanges numPV numNPVWinners)
-              return [pvBench, npvBench, diagBench]
+              return [bgroup "mainnet" [pvBench, npvBench, diagBench]]
+
+benchmarks :: IO [Benchmark]
+benchmarks = do
+  mainnet <- mainnetBenchmarks
+  synthetic <- syntheticBenchmarks
+  scaling <- scalingBenchmarks
+  return (mainnet ++ [synthetic, scaling])
